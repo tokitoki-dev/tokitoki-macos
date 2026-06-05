@@ -2,16 +2,21 @@
 //  tracklm_macosApp.swift
 //  tracklm-macos
 //
-//  Created by Eren on 2026/06/05.
+//  Menu bar app entry. SwiftUI owns @main but hands off to the AppKit
+//  AppDelegate, which manages the NSStatusItem and the Go sidecar agent.
 //
 
 import SwiftUI
 
 @main
 struct tracklm_macosApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        // No window — this is a menu bar (LSUIElement) app. Settings provides an
+        // empty scene so SwiftUI is satisfied without showing UI on launch.
+        Settings {
+            EmptyView()
         }
     }
 }
