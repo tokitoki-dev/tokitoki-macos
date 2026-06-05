@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(
-            systemSymbolName: "chart.bar.fill", accessibilityDescription: "TrackLM")
+            systemSymbolName: "chart.bar.fill", accessibilityDescription: "TokiToki")
         statusItem.button?.image?.isTemplate = true
 
         buildMenu()
@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(dashboard)
         menu.addItem(.separator())
         menu.addItem(
-            NSMenuItem(title: "Quit TrackLM", action: #selector(quit), keyEquivalent: "q"))
+            NSMenuItem(title: "Quit TokiToki", action: #selector(quit), keyEquivalent: "q"))
 
         for item in menu.items where item.action != nil {
             item.target = self

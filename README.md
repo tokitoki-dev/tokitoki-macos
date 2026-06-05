@@ -1,4 +1,4 @@
-# TrackLM Menu Bar (macOS MVP)
+# TokiToki Menu Bar (macOS MVP)
 
 A native macOS status-bar app that supervises the Go agent as a sidecar child
 process and talks to it over HTTP loopback.
@@ -7,12 +7,12 @@ process and talks to it over HTTP loopback.
 
 ```
 ┌─────────────────────────┐         HTTP 127.0.0.1:39391        ┌──────────────────┐
-│  TrackLM (Swift, menu    │  ── GET /health (no auth) ───────▶  │  tracklm-agent   │
+│  TokiToki (Swift, menu    │  ── GET /health (no auth) ───────▶  │  tokitoki-agent  │
 │  bar, NSStatusItem)      │  ── GET /usage/daily (Bearer) ───▶  │  (Go HTTP server │
 │                          │  ── POST /sync (Bearer) ─────────▶  │   + log scanner) │
 │  spawns as child ───────────────────────────────────────────▶ │                  │
 └─────────────────────────┘                                     └──────────────────┘
-        reads token from ~/Library/Application Support/TrackLM/agent.token
+        reads token from ~/.goagent/agent.token
 ```
 
 - **Protocol: HTTP over loopback.** The agent already runs a REST API
@@ -29,7 +29,7 @@ cd ../tracklm-goagent && make build
 
 # 2. Build + run the menu bar app, pointing it at the agent binary
 cd ../tracklm-macos
-export TRACKLM_AGENT_BIN="$PWD/../tracklm-goagent/bin/tracklm-agent"
+export TOKITOKI_AGENT_BIN="$PWD/../tracklm-goagent/bin/tokitoki-agent"
 swift run
 ```
 
