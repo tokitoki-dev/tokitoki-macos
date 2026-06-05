@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The agent's protected endpoints require `Authorization: Bearer <token>`,
 /// where the token lives in a file the agent writes on first run:
-///   ~/Library/Application Support/TrackLM/agent.token
+///   ~/.goagent/agent.token
 /// Both processes share the filesystem, so reading that file is the whole
 /// "key handshake" — no extra IPC needed.
 struct AgentClient {
@@ -24,6 +24,12 @@ struct AgentClient {
 
     /// Location of the token file written by the Go store package.
     static var tokenURL: URL {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let primary = home.appendingPathComponent(".goagent/agent.token")
+        if FileManager.default.fileExists(atPath: primary.path) {
+            return primary
+        }
+
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("TrackLM/agent.token")
     }
