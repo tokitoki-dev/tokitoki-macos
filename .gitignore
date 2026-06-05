@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+xcuserdata/
+
+# Swift Package Manager
+.build/
+Package.resolved
+
+# CocoaPods / Carthage / fastlane
+Pods/
+Carthage/Build/
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Code coverage and profiling
+*.profraw
+*.profdata
+*.gcda
+*.gcno
+
+# Archives and symbols
+*.xcarchive
+*.dSYM
+
+# Local configuration
+*.env
+*.env.*
+!.env.example
+
+# Logs
+*.log
