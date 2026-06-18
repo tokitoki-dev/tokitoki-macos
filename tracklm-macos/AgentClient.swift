@@ -1,46 +1,39 @@
 import Foundation
 
 /// Talks to the local Go agent over HTTP loopback (127.0.0.1:39391).
-///
-/// The agent's protected endpoints require `Authorization: Bearer <token>`,
-/// where the token lives in a file the agent writes on first run:
-///   ~/.goagent/agent.token
-/// Both processes share the filesystem, so reading that file is the whole
-/// "key handshake" — no extra IPC needed.
 struct AgentClient {
     static let baseURL = URL(string: "http://127.0.0.1:39391")!
 
     enum AgentError: Error, LocalizedError {
-        case tokenUnavailable
         case http(Int)
 
         var errorDescription: String? {
             switch self {
-            case .tokenUnavailable: return "Agent token not found yet."
             case .http(let code): return "Agent returned HTTP \(code)."
             }
         }
     }
 
-    /// Location of the token file written by the Go store package.
-    static var tokenURL: URL {
+    /// Historical builds used different data directories. Prefer the current
+    /// TokiToki path, but accept older locations if a token-auth agent is run.
+    static var tokenURLs: [URL] {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        let primary = home.appendingPathComponent(".goagent/agent.token")
-        if FileManager.default.fileExists(atPath: primary.path) {
-            return primary
-        }
-
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("TrackLM/agent.token")
+        return [
+            home.appendingPathComponent(".tokitoki/agent.token"),
+            home.appendingPathComponent(".goagent/agent.token"),
+            base.appendingPathComponent("TokiToki/agent.token"),
+            base.appendingPathComponent("TrackLM/agent.token"),
+        ]
     }
 
-    private func token() throws -> String {
-        guard let raw = try? String(contentsOf: Self.tokenURL, encoding: .utf8) else {
-            throw AgentError.tokenUnavailable
+    private func token() -> String? {
+        for url in Self.tokenURLs {
+            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
         }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { throw AgentError.tokenUnavailable }
-        return trimmed
+        return nil
     }
 
     // MARK: - Public API
@@ -73,6 +66,11 @@ struct AgentClient {
         try await post(Self.baseURL.appendingPathComponent("sync"))
     }
 
+    /// Queue a WakaTime-style desktop heartbeat in the local agent.
+    func recordHeartbeat(_ heartbeat: Heartbeat) async throws {
+        try await post(Self.baseURL.appendingPathComponent("heartbeat"), body: heartbeat)
+    }
+
     /// Ask the agent to shut down gracefully.
     func quit() async throws {
         try await post(Self.baseURL.appendingPathComponent("quit"))
@@ -83,7 +81,7 @@ struct AgentClient {
     private func get<T: Decodable>(_ url: URL) async throws -> T {
         var request = URLRequest(url: url)
         request.timeoutInterval = 5
-        request.setValue("Bearer \(try token())", forHTTPHeaderField: "Authorization")
+        authorize(&request)
         let (data, response) = try await URLSession.shared.data(for: request)
         try Self.check(response)
         return try JSONDecoder().decode(T.self, from: data)
@@ -93,9 +91,25 @@ struct AgentClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
-        request.setValue("Bearer \(try token())", forHTTPHeaderField: "Authorization")
+        authorize(&request)
         let (_, response) = try await URLSession.shared.data(for: request)
         try Self.check(response)
+    }
+
+    private func post<T: Encodable>(_ url: URL, body: T) async throws {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
+        request.httpBody = try JSONEncoder.agent.encode(body)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        try Self.check(response)
+    }
+
+    private func authorize(_ request: inout URLRequest) {
+        guard let token = token() else { return }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
     private static func check(_ response: URLResponse) throws {
@@ -113,6 +127,15 @@ struct AgentClient {
     }
 }
 
+struct Heartbeat: Encodable {
+    let time: Date
+    let entity: String
+    let project: String
+    let language: String
+    let editor: String
+    let type: String
+}
+
 // MARK: - Wire types (match the Go agent JSON)
 
 private struct DailyUsageResponse: Decodable {
@@ -122,4 +145,12 @@ private struct DailyUsageResponse: Decodable {
 private struct DailyRow: Decodable {
     let date: String
     let total_tokens: Int?
+}
+
+private extension JSONEncoder {
+    static var agent: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }
 }
