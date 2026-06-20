@@ -1,14 +1,10 @@
 import Foundation
 
-/// Launches and supervises the Go agent as a child (sidecar) process.
+/// Resolves the stateless `tokitoki` CLI bundled with the app.
 ///
-/// The agent binary is expected next to the app, or found via the
-/// TOKITOKI_AGENT_BIN env var (handy during development). When this app exits,
-/// the child is terminated too — no orphaned agent left running.
-final class AgentProcess {
-    private var process: Process?
-
-    /// Resolve the agent binary path: env override first, then a few dev paths.
+/// The macOS client must not start a long-lived local server. Each operation
+/// invokes the CLI once and parses the JSON it writes to standard output.
+enum AgentProcess {
     static func resolveBinary() -> URL? {
         for key in ["TOKITOKI_AGENT_BIN", "TRACKLM_AGENT_BIN"] {
             if let override = ProcessInfo.processInfo.environment[key],
@@ -17,46 +13,23 @@ final class AgentProcess {
             }
         }
 
-        // Alongside the app bundle's executable (production layout).
-        let exeDir = Bundle.main.executableURL?.deletingLastPathComponent()
-        let candidates = [
-            exeDir?.appendingPathComponent("tokitoki-agent"),
-            exeDir?.appendingPathComponent("tracklm-agent"),
-            // Dev layout: ../tracklm-goagent/bin/<agent> from repo root.
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent("../tracklm-goagent/bin/tokitoki-agent"),
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent("../tracklm-goagent/bin/tracklm-agent"),
-        ].compactMap { $0 }
-
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0.path) }
-    }
-
-    /// Returns true if it started a process (false if already running or binary missing).
-    @discardableResult
-    func start() -> Bool {
-        guard process == nil else { return false }
-        guard let binary = Self.resolveBinary() else {
-            NSLog("TokiToki: agent binary not found; set TOKITOKI_AGENT_BIN")
-            return false
+        let bundled = Bundle.main.resourceURL?.appendingPathComponent("tokitoki")
+        if let bundled, FileManager.default.isExecutableFile(atPath: bundled.path) {
+            return bundled
         }
 
-        let proc = Process()
-        proc.executableURL = binary
-
-        do {
-            try proc.run()
-            process = proc
-            NSLog("TokiToki: started agent at \(binary.path)")
-            return true
-        } catch {
-            NSLog("TokiToki: failed to start agent: \(error)")
-            return false
+        // This makes command-line and Xcode development work from either the
+        // repository root or a nested project directory. Release builds use
+        // the bundled resource above.
+        var directory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        for _ in 0..<5 {
+            let candidate = directory.appendingPathComponent("tracklm-goagent/bin/tokitoki")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+            directory.deleteLastPathComponent()
         }
-    }
 
-    func stop() {
-        process?.terminate()
-        process = nil
+        return nil
     }
 }

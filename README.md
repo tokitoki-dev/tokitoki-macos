@@ -1,45 +1,48 @@
 # TokiToki Menu Bar (macOS MVP)
 
-A native macOS status-bar app that supervises the Go agent as a sidecar child
-process and talks to it over HTTP loopback.
+A native macOS status-bar app that calls the stateless Go agent CLI and renders
+its JSON results.
 
 ## Architecture
 
 ```
-┌─────────────────────────┐         HTTP 127.0.0.1:39391        ┌──────────────────┐
-│  TokiToki (Swift, menu    │  ── GET /health (no auth) ───────▶  │  tokitoki-agent  │
-│  bar, NSStatusItem)      │  ── GET /usage/daily (Bearer) ───▶  │  (Go HTTP server │
-│                          │  ── POST /sync (Bearer) ─────────▶  │   + log scanner) │
-│  spawns as child ───────────────────────────────────────────▶ │                  │
+┌─────────────────────────┐       Process + stdout JSON        ┌──────────────────┐
+│  TokiToki (Swift, menu   │  ── tokitoki scan ───────────────▶ │  tokitoki CLI    │
+│  bar, NSStatusItem)      │  ── tokitoki daily --provider all  │  (Go scanner +   │
+│                          │  ── tokitoki sync ───────────────▶ │   uploader)      │
 └─────────────────────────┘                                     └──────────────────┘
-        reads token from ~/.goagent/agent.token
+                                                              ~/.tokitoki/
 ```
 
-- **Protocol: HTTP over loopback.** The agent already runs a REST API
-  (`internal/httpapi`), so the app is just a client + process supervisor.
-- **Auth:** protected endpoints need `Authorization: Bearer <token>`. The agent
-  writes the token to a shared file on first run; the app reads it. No extra IPC.
-- **Lifecycle:** the app starts the agent on launch and terminates it on quit.
+- **Protocol:** the app launches `tokitoki` for each operation and decodes JSON
+  from stdout. Errors stay on stderr and are displayed in the menu.
+- **Lifecycle:** the app runs `scan` once on launch, refreshes `status` and
+  `daily` every minute, and only calls `sync` when the user selects it.
+- **Packaging:** the Xcode target compiles the Go module and copies `tokitoki`
+  into `TokiToki.app/Contents/Resources`, so the app does not depend on an
+  externally running daemon or an old binary in the repository.
 
 ## Run (dev)
 
 ```sh
-# 1. Build the agent
-cd ../tracklm-goagent && make build
-
-# 2. Build + run the menu bar app, pointing it at the agent binary
-cd ../tracklm-macos
-export TOKITOKI_AGENT_BIN="$PWD/../tracklm-goagent/bin/tokitoki-agent"
-swift run
+# Build and run from Xcode, or use xcodebuild:
+cd tracklm-macos
+xcodebuild -project tracklm-macos.xcodeproj -scheme tracklm-macos \
+  -configuration Debug -derivedDataPath /tmp/tracklm-derived build
+open /tmp/tracklm-derived/Build/Products/Debug/tracklm-macos.app
 ```
 
 A chart icon appears in the menu bar. The menu shows agent status and today's
-token total, with **Sync Now**, **Open Dashboard**, and **Quit**.
+token total, with **Scan Now**, **Sync Now**, **Open Dashboard**, and **Quit**.
+
+During development, `TOKITOKI_AGENT_BIN` can override the bundled executable.
+It must point at the current CLI binary (`tracklm-goagent/bin/tokitoki`), not a
+legacy HTTP daemon.
 
 ## MVP scope
 
-Implemented: spawn agent, show running/offline status, show today's tokens,
-manual Sync Now, open the cloud dashboard, quit (stops the agent too).
+Implemented: invoke the bundled Go CLI, scan on launch, show today's indexed
+tokens and event count, manual Scan/Sync, open the configured server URL, quit.
 
-Not yet: packaged `.app` bundle / code signing, API-key configuration UI,
-auto-restart if the agent crashes, launch-at-login.
+Not yet: code signing/notarization, API-key configuration UI, a `launchd`
+schedule for background sync, launch-at-login.

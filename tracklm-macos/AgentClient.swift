@@ -1,156 +1,158 @@
 import Foundation
 
-/// Talks to the local Go agent over HTTP loopback (127.0.0.1:39391).
+/// A small adapter around the stateless Go CLI.
+///
+/// This follows the same short-lived-process model used by WakaTime's macOS
+/// client: launch the bundled executable for one operation, collect stdout,
+/// then decode its JSON contract. The Go agent owns all durable state under
+/// `~/.tokitoki`.
 struct AgentClient {
-    static let baseURL = URL(string: "http://127.0.0.1:39391")!
+    let executableURL: URL
 
-    enum AgentError: Error, LocalizedError {
-        case http(Int)
+    init?(executableURL: URL? = AgentProcess.resolveBinary()) {
+        guard let executableURL else { return nil }
+        self.executableURL = executableURL
+    }
+
+    enum AgentError: LocalizedError {
+        case commandFailed(command: String, status: Int32, stderr: String)
+        case invalidResponse(command: String, underlying: Error)
 
         var errorDescription: String? {
             switch self {
-            case .http(let code): return "Agent returned HTTP \(code)."
+            case let .commandFailed(command, status, stderr):
+                let details = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                return details.isEmpty
+                    ? "tokitoki \(command) failed with exit code \(status)."
+                    : "tokitoki \(command) failed: \(details)"
+            case let .invalidResponse(command, underlying):
+                return "tokitoki \(command) returned invalid JSON: \(underlying.localizedDescription)"
             }
         }
     }
 
-    /// Historical builds used different data directories. Prefer the current
-    /// TokiToki path, but accept older locations if a token-auth agent is run.
-    static var tokenURLs: [URL] {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return [
-            home.appendingPathComponent(".tokitoki/agent.token"),
-            home.appendingPathComponent(".goagent/agent.token"),
-            base.appendingPathComponent("TokiToki/agent.token"),
-            base.appendingPathComponent("TrackLM/agent.token"),
-        ]
+    func status() async throws -> AgentStatus {
+        try await runJSON(["status"], as: AgentStatus.self)
     }
 
-    private func token() -> String? {
-        for url in Self.tokenURLs {
-            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed }
-        }
-        return nil
+    func scan() async throws -> ScanResult {
+        try await runJSON(["scan"], as: ScanResult.self)
     }
 
-    // MARK: - Public API
-
-    /// `/health` needs no auth — the cheapest "is it alive" probe.
-    func isHealthy() async -> Bool {
-        var request = URLRequest(url: Self.baseURL.appendingPathComponent("health"))
-        request.timeoutInterval = 2
-        guard let (_, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse else {
-            return false
-        }
-        return http.statusCode == 200
+    func syncNow() async throws -> SyncResult {
+        try await runJSON(["sync"], as: SyncResult.self)
     }
 
-    /// Sum of today's total tokens across all providers.
-    func todayTokens() async throws -> Int {
-        let url = Self.baseURL.appendingPathComponent("usage/daily")
-            .appending(queryItems: [URLQueryItem(name: "provider", value: "all")])
-        let payload: DailyUsageResponse = try await get(url)
-
-        let today = Self.todayString()
-        return payload.data
+    /// Returns today's total across all indexed providers and projects.
+    func todayTokens(now: Date = .now) async throws -> UInt64 {
+        let response: DailyUsageResponse = try await runJSON(["daily", "--provider", "all"], as: DailyUsageResponse.self)
+        let formatter = Self.dayFormatter
+        let today = formatter.string(from: now)
+        return response.data
             .filter { $0.date == today }
-            .reduce(0) { $0 + ($1.total_tokens ?? 0) }
+            .reduce(0) { $0 + $1.totalTokens }
     }
 
-    /// Trigger a scan + upload to the cloud now.
-    func syncNow() async throws {
-        try await post(Self.baseURL.appendingPathComponent("sync"))
-    }
-
-    /// Queue a WakaTime-style desktop heartbeat in the local agent.
-    func recordHeartbeat(_ heartbeat: Heartbeat) async throws {
-        try await post(Self.baseURL.appendingPathComponent("heartbeat"), body: heartbeat)
-    }
-
-    /// Ask the agent to shut down gracefully.
-    func quit() async throws {
-        try await post(Self.baseURL.appendingPathComponent("quit"))
-    }
-
-    // MARK: - Transport
-
-    private func get<T: Decodable>(_ url: URL) async throws -> T {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 5
-        authorize(&request)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try Self.check(response)
-        return try JSONDecoder().decode(T.self, from: data)
-    }
-
-    private func post(_ url: URL) async throws {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 30
-        authorize(&request)
-        let (_, response) = try await URLSession.shared.data(for: request)
-        try Self.check(response)
-    }
-
-    private func post<T: Encodable>(_ url: URL, body: T) async throws {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 10
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        authorize(&request)
-        request.httpBody = try JSONEncoder.agent.encode(body)
-        let (_, response) = try await URLSession.shared.data(for: request)
-        try Self.check(response)
-    }
-
-    private func authorize(_ request: inout URLRequest) {
-        guard let token = token() else { return }
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-    }
-
-    private static func check(_ response: URLResponse) throws {
-        guard let http = response as? HTTPURLResponse else { return }
-        guard (200..<300).contains(http.statusCode) else {
-            throw AgentError.http(http.statusCode)
+    private func runJSON<T: Decodable>(_ arguments: [String], as type: T.Type) async throws -> T {
+        let command = arguments.joined(separator: " ")
+        let result = try await run(arguments)
+        do {
+            return try JSONDecoder().decode(T.self, from: result.output)
+        } catch {
+            throw AgentError.invalidResponse(command: command, underlying: error)
         }
     }
 
-    private static func todayString() -> String {
+    private func run(_ arguments: [String]) async throws -> CommandResult {
+        let executableURL = executableURL
+        return try await withCheckedThrowingContinuation { continuation in
+            let process = Process()
+            let output = Pipe()
+            let errors = Pipe()
+
+            process.executableURL = executableURL
+            process.arguments = arguments
+            process.standardOutput = output
+            process.standardError = errors
+            process.terminationHandler = { completedProcess in
+                let stdout = output.fileHandleForReading.readDataToEndOfFile()
+                let stderr = errors.fileHandleForReading.readDataToEndOfFile()
+                let command = arguments.joined(separator: " ")
+
+                guard completedProcess.terminationStatus == 0 else {
+                    continuation.resume(throwing: AgentError.commandFailed(
+                        command: command,
+                        status: completedProcess.terminationStatus,
+                        stderr: String(decoding: stderr, as: UTF8.self)
+                    ))
+                    return
+                }
+                continuation.resume(returning: CommandResult(output: stdout))
+            }
+
+            do {
+                try process.run()
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+
+    private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter.string(from: Date())
+        formatter.timeZone = .current
+        return formatter
+    }()
+}
+
+private struct CommandResult {
+    let output: Data
+}
+
+struct AgentStatus: Decodable {
+    let indexedEvents: Int
+    let serverURL: String
+    let hasAPIKey: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case indexedEvents = "indexed_events"
+        case serverURL = "server_url"
+        case hasAPIKey = "has_api_key"
     }
 }
 
-struct Heartbeat: Encodable {
-    let time: Date
-    let entity: String
-    let project: String
-    let language: String
-    let editor: String
-    let type: String
+struct ScanResult: Decodable {
+    let claude: ProviderScanResult
+    let codex: ProviderScanResult
 }
 
-// MARK: - Wire types (match the Go agent JSON)
+struct ProviderScanResult: Decodable {
+    let eventsInserted: Int
+
+    enum CodingKeys: String, CodingKey {
+        case eventsInserted = "events_inserted"
+    }
+}
+
+struct SyncResult: Decodable {
+    let ok: Bool
+    let events: Int
+    let accepted: Int
+    let duplicate: Int
+}
 
 private struct DailyUsageResponse: Decodable {
-    let data: [DailyRow]
+    let data: [DailyUsageRow]
 }
 
-private struct DailyRow: Decodable {
+private struct DailyUsageRow: Decodable {
     let date: String
-    let total_tokens: Int?
-}
+    let totalTokens: UInt64
 
-private extension JSONEncoder {
-    static var agent: JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
+    enum CodingKeys: String, CodingKey {
+        case date
+        case totalTokens = "total_tokens"
     }
 }
