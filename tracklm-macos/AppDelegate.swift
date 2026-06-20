@@ -4,149 +4,151 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var refreshTimer: Timer?
+    private var syncTask: Task<Void, Never>?
+    private var syncQueued = false
     private var client: AgentClient?
-    private var agentStatus: AgentStatus?
-    private var todayTokens: UInt64?
+    private let settingsWindowController = SettingsWindowController()
+    private let monitoredAgentsWindowController = MonitoredAgentsWindowController()
+    private lazy var usageMonitor = AIUsageMonitor { [weak self] in
+        self?.scheduleAutomaticSync()
+    }
 
-    private let statusMenuItem = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
-    private let tokensMenuItem = NSMenuItem(title: "Today: —", action: nil, keyEquivalent: "")
-    private let indexedMenuItem = NSMenuItem(title: "Indexed: —", action: nil, keyEquivalent: "")
-    private let scanMenuItem = NSMenuItem(title: "Scan Now", action: #selector(scanNow), keyEquivalent: "r")
-    private let syncMenuItem = NSMenuItem(title: "Sync Now", action: #selector(syncNow), keyEquivalent: "s")
-    private let dashboardMenuItem = NSMenuItem(title: "Open Dashboard", action: #selector(openDashboard), keyEquivalent: "d")
+    private let dashboardMenuItem = NSMenuItem(title: "Dashboard", action: #selector(openDashboard), keyEquivalent: "")
+    private let monitoredAgentsMenuItem = NSMenuItem(title: "Agents", action: #selector(openMonitoredAgents), keyEquivalent: "")
+    private let settingsMenuItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "chart.bar.fill", accessibilityDescription: "TokiToki")
-        statusItem.button?.image?.isTemplate = true
+        statusItem.button?.title = "—"
 
         buildMenu()
         client = AgentClient()
-        Task { await scanAndRefresh() }
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.refresh() }
-        }
+        render()
+        usageMonitor.start(providers: AgentPreferences.enabledProviders)
+        scheduleAutomaticSync()
+        refreshTimer = Timer.scheduledTimer(
+            timeInterval: 30 * 60,
+            target: self,
+            selector: #selector(triggerAutomaticSync),
+            userInfo: nil,
+            repeats: true
+        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
+        syncTask?.cancel()
+        usageMonitor.stop()
     }
 
     private func buildMenu() {
         let menu = NSMenu()
-        [statusMenuItem, tokensMenuItem, indexedMenuItem].forEach {
-            $0.isEnabled = false
-            menu.addItem($0)
-        }
-        menu.addItem(.separator())
-        menu.addItem(scanMenuItem)
-        menu.addItem(syncMenuItem)
+        menu.minimumWidth = 175
         menu.addItem(dashboardMenuItem)
+        menu.addItem(monitoredAgentsMenuItem)
+        menu.addItem(settingsMenuItem)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit TokiToki", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: ""))
 
         for item in menu.items where item.action != nil {
             item.target = self
+            item.image = nil
         }
         statusItem.menu = menu
     }
 
-    private func refresh() async {
-        guard let client else {
-            agentStatus = nil
-            todayTokens = nil
-            render(error: "CLI not found")
+    private func scheduleAutomaticSync() {
+        guard AgentPreferences.hasAPIKey else { return }
+        guard syncTask == nil else {
+            syncQueued = true
             return
         }
-
-        do {
-            let status = try await client.status()
-            let tokens = try await client.todayTokens()
-            agentStatus = status
-            todayTokens = tokens
-            render()
-        } catch {
-            agentStatus = nil
-            todayTokens = nil
-            render(error: error.localizedDescription)
+        syncTask = Task { [weak self] in
+            guard let self else { return }
+            await syncAutomatically()
+            syncTask = nil
+            if syncQueued {
+                syncQueued = false
+                scheduleAutomaticSync()
+            }
         }
     }
 
-    private func scanAndRefresh() async {
-        guard let client else {
-            render(error: "CLI not found")
-            return
-        }
-
-        render(message: "Scanning local AI usage…")
-        do {
-            _ = try await client.scan()
-        } catch {
-            render(error: error.localizedDescription)
-            return
-        }
-        await refresh()
+    @objc private func triggerAutomaticSync() {
+        scheduleAutomaticSync()
     }
 
-    private func render(message: String? = nil, error: String? = nil) {
-        if let error {
-            statusMenuItem.title = "○ \(Self.truncate(error, to: 64))"
-            scanMenuItem.isEnabled = client != nil
-            syncMenuItem.isEnabled = client != nil
-            dashboardMenuItem.isEnabled = false
-            return
-        }
-        if let message {
-            statusMenuItem.title = message
-            scanMenuItem.isEnabled = false
-            syncMenuItem.isEnabled = false
-            dashboardMenuItem.isEnabled = false
-            return
-        }
-
-        statusMenuItem.title = agentStatus == nil ? "○ CLI unavailable" : "● Go agent ready"
-        tokensMenuItem.title = todayTokens.map { "Today: \(Self.format($0)) tokens" } ?? "Today: —"
-        indexedMenuItem.title = agentStatus.map { "Indexed: \(Self.format($0.indexedEvents)) events" } ?? "Indexed: —"
-        scanMenuItem.isEnabled = client != nil
-        syncMenuItem.isEnabled = client != nil && agentStatus?.hasAPIKey == true
-        dashboardMenuItem.isEnabled = URL(string: agentStatus?.serverURL ?? "") != nil
-    }
-
-    @objc private func scanNow() {
-        Task { await scanAndRefresh() }
-    }
-
-    @objc private func syncNow() {
+    private func syncAutomatically() async {
         guard let client else { return }
-        render(message: "Syncing…")
+
+        do {
+            try await client.sync(providers: AgentPreferences.enabledProviders)
+        } catch {
+            NSLog("TokiToki: %@", Self.menuMessage(for: error))
+        }
+    }
+
+    private func render() {
+        settingsMenuItem.isEnabled = client != nil
+        monitoredAgentsMenuItem.isEnabled = client != nil
+    }
+
+    @objc private func openSettings() {
+        settingsWindowController.show(
+            hasAPIKey: AgentPreferences.hasAPIKey
+        ) { [weak self] apiKey in
+            self?.saveAPIKey(apiKey)
+        }
+    }
+
+    @objc private func openMonitoredAgents() {
+        monitoredAgentsWindowController.show(enabledProviders: AgentPreferences.enabledProviders) { [weak self] providers in
+            guard let self else { return }
+            AgentPreferences.enabledProviders = providers
+            usageMonitor.start(providers: providers)
+            scheduleAutomaticSync()
+        }
+    }
+
+    private func saveAPIKey(_ apiKey: String?) {
+        guard let client else { return }
         Task {
             do {
-                _ = try await client.syncNow()
-                await refresh()
+                try await client.sync(apiKey: apiKey, providers: AgentPreferences.enabledProviders)
+                if apiKey != nil { AgentPreferences.hasAPIKey = true }
             } catch {
-                render(error: error.localizedDescription)
+                NSLog("TokiToki: %@", Self.menuMessage(for: error))
             }
         }
     }
 
     @objc private func openDashboard() {
-        guard let serverURL = agentStatus?.serverURL, let url = URL(string: serverURL) else { return }
-        NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(URL(string: "http://localhost:9093")!)
     }
 
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
     }
 
-    private static func format(_ value: some BinaryInteger) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: Int64(value))) ?? "\(value)"
+    private static func menuMessage(for error: Error) -> String {
+        (error as? AgentClient.AgentError)?.menuMessage ?? "Agent unavailable"
+    }
+}
+
+private enum AgentPreferences {
+    private static let hasAPIKeyKey = "has_api_key"
+    private static let enabledProvidersKey = "enabled_providers"
+
+    static var hasAPIKey: Bool {
+        get { UserDefaults.standard.bool(forKey: hasAPIKeyKey) }
+        set { UserDefaults.standard.set(newValue, forKey: hasAPIKeyKey) }
     }
 
-    private static func truncate(_ value: String, to limit: Int) -> String {
-        guard value.count > limit else { return value }
-        return String(value.prefix(max(0, limit - 1))) + "…"
+    static var enabledProviders: [String] {
+        get {
+            let saved = UserDefaults.standard.stringArray(forKey: enabledProvidersKey) ?? []
+            return saved.isEmpty ? ["claude", "codex"] : saved
+        }
+        set { UserDefaults.standard.set(newValue, forKey: enabledProvidersKey) }
     }
 }

@@ -7,17 +7,20 @@ its JSON results.
 
 ```
 ┌─────────────────────────┐       Process + stdout JSON        ┌──────────────────┐
-│  TokiToki (Swift, menu   │  ── tokitoki scan ───────────────▶ │  tokitoki CLI    │
-│  bar, NSStatusItem)      │  ── tokitoki daily --provider all  │  (Go scanner +   │
-│                          │  ── tokitoki sync ───────────────▶ │   uploader)      │
+│  TokiToki (Swift, menu   │  ── tokitoki ────────────────────▶ │  tokitoki CLI    │
+│  bar, NSStatusItem)      │                                     │  (Go scanner +   │
+│                          │                                     │   uploader)      │
 └─────────────────────────┘                                     └──────────────────┘
                                                               ~/.tokitoki/
 ```
 
-- **Protocol:** the app launches `tokitoki` for each operation and decodes JSON
-  from stdout. Errors stay on stderr and are displayed in the menu.
-- **Lifecycle:** the app runs `scan` once on launch, refreshes `status` and
-  `daily` every minute, and only calls `sync` when the user selects it.
+- **Protocol:** the app launches `tokitoki` for each automatic upload and
+  decodes its minimal success response. Detailed diagnostics stay on stderr;
+  the menu shows a short, actionable status only.
+- **Lifecycle:** on launch and every 30 minutes, the app invokes the CLI when
+  an API key is configured. It also recursively watches the selected Claude
+  Code/Codex data folders and invokes the CLI after a short debounce whenever
+  those files change.
 - **Packaging:** the Xcode target compiles the Go module and copies `tokitoki`
   into `TokiToki.app/Contents/Resources`, so the app does not depend on an
   externally running daemon or an old binary in the repository.
@@ -32,8 +35,10 @@ xcodebuild -project tracklm-macos.xcodeproj -scheme tracklm-macos \
 open /tmp/tracklm-derived/Build/Products/Debug/tracklm-macos.app
 ```
 
-A chart icon appears in the menu bar. The menu shows agent status and today's
-token total, with **Scan Now**, **Sync Now**, **Open Dashboard**, and **Quit**.
+The status bar uses a neutral text affordance rather than an app icon. Its menu
+shows a short sync status, with **Open Dashboard**, **Settings**, and **Quit**.
+Settings provides API key, launch-at-login, and the local clients to read
+(**Claude Code** and/or **Codex**).
 
 During development, `TOKITOKI_AGENT_BIN` can override the bundled executable.
 It must point at the current CLI binary (`tracklm-goagent/bin/tokitoki`), not a
@@ -41,8 +46,9 @@ legacy HTTP daemon.
 
 ## MVP scope
 
-Implemented: invoke the bundled Go CLI, scan on launch, show today's indexed
-tokens and event count, manual Scan/Sync, open the configured server URL, quit.
+Implemented: invoke the bundled Go CLI, automatically upload selected local
+clients, configure the API key and enabled clients, register launch-at-login,
+show the app version, open the local dashboard, and quit.
 
-Not yet: code signing/notarization, API-key configuration UI, a `launchd`
-schedule for background sync, launch-at-login.
+Not yet: code signing/notarization and a `launchd` schedule that can sync while
+the app is not running.
