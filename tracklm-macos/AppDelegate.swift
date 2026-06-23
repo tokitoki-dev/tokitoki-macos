@@ -18,8 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settingsMenuItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "—"
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        configureStatusItemIcon()
 
         buildMenu()
         client = AgentClient()
@@ -33,6 +33,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             userInfo: nil,
             repeats: true
         )
+    }
+
+    private func configureStatusItemIcon() {
+        guard let button = statusItem.button else { return }
+
+        if let image = NSImage(named: "TrackLMLogo")?.copy() as? NSImage {
+            image.isTemplate = true
+            image.size = NSSize(width: 15, height: 15)
+            button.image = image
+            button.imagePosition = .imageOnly
+            button.title = ""
+        } else {
+            button.title = "T"
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
