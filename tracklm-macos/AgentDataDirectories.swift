@@ -1,7 +1,7 @@
 import Foundation
 
 enum AgentDataDirectories {
-    static func paths(for provider: String) -> [String] {
+    nonisolated static func paths(for provider: String) -> [String] {
         switch provider {
         case "claude":
             return claudePaths()
@@ -12,11 +12,11 @@ enum AgentDataDirectories {
         }
     }
 
-    static func watchPaths(for providers: [String]) -> [String] {
+    nonisolated static func watchPaths(for providers: [String]) -> [String] {
         Array(Set(providers.flatMap(paths(for:)).filter(isExistingDirectory))).sorted()
     }
 
-    static func syncArguments(for providers: [String]) -> [String] {
+    nonisolated static func syncArguments(for providers: [String]) -> [String] {
         var arguments: [String] = []
         if providers.contains("claude"), let path = paths(for: "claude").first(where: isExistingDirectory) {
             arguments += ["--claude-dir", path]
@@ -27,7 +27,7 @@ enum AgentDataDirectories {
         return arguments
     }
 
-    private static func claudePaths() -> [String] {
+    private nonisolated static func claudePaths() -> [String] {
         let environment = ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser
         if let configured = environment["CLAUDE_CONFIG_DIR"] {
@@ -45,7 +45,7 @@ enum AgentDataDirectories {
         ]
     }
 
-    private static func codexPaths() -> [String] {
+    private nonisolated static func codexPaths() -> [String] {
         let environment = ProcessInfo.processInfo.environment
         let home = FileManager.default.homeDirectoryForCurrentUser
         if let configured = environment["CODEX_CONFIG_DIR"] {
@@ -56,7 +56,7 @@ enum AgentDataDirectories {
         return [home.appendingPathComponent(".codex").path]
     }
 
-    private static func isExistingDirectory(_ path: String) -> Bool {
+    private nonisolated static func isExistingDirectory(_ path: String) -> Bool {
         var isDirectory: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
