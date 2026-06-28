@@ -42,6 +42,7 @@ final class SettingsWindowController: NSWindowController {
         versionLabel.stringValue = "Version \(marketingVersion) (\(buildVersion))"
 
         NSApp.activate(ignoringOtherApps: true)
+        window?.center()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
     }

@@ -37,8 +37,9 @@ open /tmp/tracklm-derived/Build/Products/Debug/tracklm-macos.app
 
 The status bar uses a neutral text affordance rather than an app icon. Its menu
 shows a short sync status, with **Open Dashboard**, **Settings**, and **Quit**.
-Settings provides API key, launch-at-login, and the local clients to read
-(**Claude Code** and/or **Codex**).
+On first launch, a short setup window points users to API key setup and the
+local clients to read (**Claude Code** and/or **Codex**). Settings provides API
+key and launch-at-login controls.
 
 During development, `TOKITOKI_AGENT_BIN` can override the bundled executable.
 It must point at the current CLI binary (`tracklm-goagent/bin/tokitoki`), not a
@@ -46,9 +47,9 @@ legacy HTTP daemon.
 
 ## MVP scope
 
-Implemented: invoke the bundled Go CLI, automatically upload selected local
-clients, configure the API key and enabled clients, register launch-at-login,
-show the app version, open the local dashboard, and quit.
+Implemented: first-run setup, invoke the bundled Go CLI, automatically upload
+selected local clients, configure the API key and enabled clients, register
+launch-at-login, show the app version, open the local dashboard, and quit.
 
 Not yet: code signing/notarization and a `launchd` schedule that can sync while
 the app is not running.

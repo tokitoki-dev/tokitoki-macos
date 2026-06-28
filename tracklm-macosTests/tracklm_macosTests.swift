@@ -37,6 +37,15 @@ final class tracklm_macosTests: XCTestCase {
 
     @MainActor
     func testCLIClientRunsOneSyncOperation() async throws {
+        let claudeDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
+        setenv("CLAUDE_CONFIG_DIR", claudeDir.path, 1)
+        addTeardownBlock {
+            unsetenv("CLAUDE_CONFIG_DIR")
+            try? FileManager.default.removeItem(at: claudeDir)
+        }
+
         let script = try makeFakeAgent()
         let client = try XCTUnwrap(AgentClient(executableURL: script))
 
@@ -48,11 +57,14 @@ final class tracklm_macosTests: XCTestCase {
             .appendingPathComponent("tokitoki-test-\(UUID().uuidString)")
         let source = """
         #!/bin/sh
-        test \"$1\" = '--api-key-stdin'
-        test \"$2\" = '--providers'
-        test \"$3\" = 'claude'
-        read key
-        test \"$key\" = 'tokitoki_test_key'
+        if [ \"$1\" = 'set' ]; then
+          test \"$2\" = 'key'
+          test \"$3\" = 'tokitoki_test_key'
+          printf '%s\\n' '{\"ok\":true}'
+          exit 0
+        fi
+        test \"$1\" = '--claude-dir'
+        test -d \"$2\"
         printf '%s\\n' '{\"ok\":true}'
         """
         try source.write(to: script, atomically: true, encoding: .utf8)

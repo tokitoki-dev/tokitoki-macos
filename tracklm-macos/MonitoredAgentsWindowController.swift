@@ -32,6 +32,7 @@ final class MonitoredAgentsWindowController: NSWindowController {
         codexRow.toggle.state = enabledProviders.contains("codex") ? .on : .off
 
         NSApp.activate(ignoringOtherApps: true)
+        window?.center()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
     }

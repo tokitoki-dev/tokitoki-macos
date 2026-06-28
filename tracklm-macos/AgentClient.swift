@@ -41,17 +41,29 @@ struct AgentClient {
     }
 
     func sync(apiKey: String? = nil, providers: [String]? = nil) async throws {
-        var arguments: [String] = []
-        var input: Data?
         if let apiKey {
-            arguments.append("--api-key-stdin")
-            input = Data((apiKey + "\n").utf8)
-        }
-        if let providers {
-            arguments += ["--providers", providers.joined(separator: ",")]
+            try await setAPIKey(apiKey)
         }
 
-        let result = try await run(arguments, input: input)
+        let arguments = AgentDataDirectories.syncArguments(for: providers ?? [])
+        guard !arguments.isEmpty else { return }
+        try await runSync(arguments)
+    }
+
+    func setAPIKey(_ apiKey: String) async throws {
+        let result = try await run(["set", "key", apiKey], input: nil)
+        do {
+            let response = try JSONDecoder().decode(SyncResponse.self, from: result.output)
+            guard response.ok else { throw AgentError.invalidResponse(AgentError.commandFailed(status: 1, stderr: "")) }
+        } catch let error as AgentError {
+            throw error
+        } catch {
+            throw AgentError.invalidResponse(error)
+        }
+    }
+
+    private func runSync(_ arguments: [String]) async throws {
+        let result = try await run(arguments, input: nil)
         do {
             let response = try JSONDecoder().decode(SyncResponse.self, from: result.output)
             guard response.ok else { throw AgentError.invalidResponse(AgentError.commandFailed(status: 1, stderr: "")) }

@@ -9,11 +9,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var client: AgentClient?
     private let settingsWindowController = SettingsWindowController()
     private let monitoredAgentsWindowController = MonitoredAgentsWindowController()
+    private let onboardingWindowController = OnboardingWindowController()
     private lazy var usageMonitor = AIUsageMonitor { [weak self] in
         self?.scheduleAutomaticSync()
     }
 
     private let dashboardMenuItem = NSMenuItem(title: "Dashboard", action: #selector(openDashboard), keyEquivalent: "")
+    private let setupMenuItem = NSMenuItem(title: "Setup", action: #selector(openSetup), keyEquivalent: "")
     private let monitoredAgentsMenuItem = NSMenuItem(title: "Agents", action: #selector(openMonitoredAgents), keyEquivalent: "")
     private let settingsMenuItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
 
@@ -26,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         render()
         usageMonitor.start(providers: AgentPreferences.enabledProviders)
         scheduleAutomaticSync()
+        showSetupIfNeeded()
         refreshTimer = Timer.scheduledTimer(
             timeInterval: 30 * 60,
             target: self,
@@ -59,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.minimumWidth = 175
         menu.addItem(dashboardMenuItem)
+        menu.addItem(setupMenuItem)
         menu.addItem(monitoredAgentsMenuItem)
         menu.addItem(settingsMenuItem)
         menu.addItem(.separator())
@@ -105,6 +109,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func render() {
         settingsMenuItem.isEnabled = client != nil
         monitoredAgentsMenuItem.isEnabled = client != nil
+        setupMenuItem.isEnabled = client != nil
+    }
+
+    private func showSetupIfNeeded() {
+        guard !AgentPreferences.onboardingCompleted || !AgentPreferences.hasAPIKey else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.openSetup()
+        }
+    }
+
+    @objc private func openSetup() {
+        onboardingWindowController.show(
+            hasAPIKey: AgentPreferences.hasAPIKey,
+            enabledProviders: AgentPreferences.enabledProviders,
+            onSetKey: { [weak self] in
+                self?.openSettings()
+            },
+            onChooseAgents: { [weak self] in
+                self?.openMonitoredAgents()
+            },
+            onDone: {
+                AgentPreferences.onboardingCompleted = true
+            }
+        )
     }
 
     @objc private func openSettings() {
@@ -152,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private enum AgentPreferences {
     private static let hasAPIKeyKey = "has_api_key"
     private static let enabledProvidersKey = "enabled_providers"
+    private static let onboardingCompletedKey = "onboarding_completed"
 
     static var hasAPIKey: Bool {
         get { UserDefaults.standard.bool(forKey: hasAPIKeyKey) }
@@ -164,5 +193,10 @@ private enum AgentPreferences {
             return saved.isEmpty ? ["claude", "codex"] : saved
         }
         set { UserDefaults.standard.set(newValue, forKey: enabledProvidersKey) }
+    }
+
+    static var onboardingCompleted: Bool {
+        get { UserDefaults.standard.bool(forKey: onboardingCompletedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: onboardingCompletedKey) }
     }
 }
