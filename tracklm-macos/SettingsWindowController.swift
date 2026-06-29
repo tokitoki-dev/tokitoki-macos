@@ -2,14 +2,13 @@ import AppKit
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
-    private let apiKeyField = NSSecureTextField(frame: .zero)
-    private let apiKeyHint = NSTextField(labelWithString: "")
+    private let apiKeyField = NSTextField(frame: .zero)
     private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
     private let versionLabel = NSTextField(labelWithString: "")
     private var saveAPIKey: ((String?) -> Void)?
 
     init() {
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 210))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 360))
         let window = NSWindow(
             contentRect: contentView.bounds,
             styleMask: [.titled, .closable],
@@ -28,13 +27,10 @@ final class SettingsWindowController: NSWindowController {
         nil
     }
 
-    func show(hasAPIKey: Bool, saveAPIKey: @escaping (String?) -> Void) {
+    func show(apiKey: String?, saveAPIKey: @escaping (String?) -> Void) {
         self.saveAPIKey = saveAPIKey
-        apiKeyField.stringValue = ""
-        apiKeyField.placeholderString = hasAPIKey ? "Saved — enter a new key to replace it" : "Paste your API key"
-        apiKeyHint.stringValue = hasAPIKey
-            ? "An API key is configured. Leave this field empty to keep it."
-            : "Required for automatic sync."
+        apiKeyField.stringValue = apiKey ?? ""
+        apiKeyField.placeholderString = "Paste your API key"
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
 
         let marketingVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
@@ -45,15 +41,17 @@ final class SettingsWindowController: NSWindowController {
         window?.center()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
+        apiKeyField.selectText(nil)
     }
 
     private func configureContent(in contentView: NSView) {
         let apiKeyLabel = NSTextField(labelWithString: "API Key")
         apiKeyLabel.font = .systemFont(ofSize: 13, weight: .medium)
-        apiKeyHint.textColor = .secondaryLabelColor
-        apiKeyHint.font = .systemFont(ofSize: 11)
-        apiKeyHint.maximumNumberOfLines = 0
         apiKeyField.translatesAutoresizingMaskIntoConstraints = false
+        apiKeyField.usesSingleLineMode = true
+        apiKeyField.lineBreakMode = .byClipping
+        apiKeyField.cell?.isScrollable = true
+        apiKeyField.cell?.wraps = false
 
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(launchAtLoginChanged)
@@ -70,7 +68,7 @@ final class SettingsWindowController: NSWindowController {
         versionLabel.textColor = .secondaryLabelColor
         versionLabel.font = .systemFont(ofSize: 11)
 
-        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, apiKeyHint, launchAtLoginCheckbox, versionLabel, buttonRow])
+        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, versionLabel, buttonRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 10
@@ -78,11 +76,10 @@ final class SettingsWindowController: NSWindowController {
         contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 56),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 60),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -60),
             apiKeyField.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            apiKeyHint.widthAnchor.constraint(equalTo: stack.widthAnchor),
             buttonRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }

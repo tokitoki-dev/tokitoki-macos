@@ -72,7 +72,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func scheduleAutomaticSync() {
-        guard AgentPreferences.hasAPIKey else { return }
         guard syncTask == nil else {
             syncQueued = true
             return
@@ -96,7 +95,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let client else { return }
 
         do {
+            guard !(try await client.getAPIKey()).isEmpty else { return }
             try await client.sync(providers: AgentPreferences.enabledProviders)
+        } catch let error as AgentClient.AgentError where error.isMissingAPIKey {
+            return
         } catch {
             NSLog("TokiToki: %@", Self.menuMessage(for: error))
         }
@@ -108,10 +110,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() {
-        settingsWindowController.show(
-            hasAPIKey: AgentPreferences.hasAPIKey
-        ) { [weak self] apiKey in
-            self?.saveAPIKey(apiKey)
+        guard let client else { return }
+        Task { [weak self] in
+            let apiKey: String?
+            do {
+                apiKey = try await client.getAPIKey()
+            } catch let error as AgentClient.AgentError where error.isMissingAPIKey {
+                apiKey = nil
+            } catch {
+                apiKey = nil
+                NSLog("TokiToki: %@", Self.menuMessage(for: error))
+            }
+            self?.settingsWindowController.show(
+                apiKey: apiKey
+            ) { [weak self] apiKey in
+                self?.saveAPIKey(apiKey)
+            }
         }
     }
 
@@ -126,9 +140,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func saveAPIKey(_ apiKey: String?) {
         guard let client else { return }
+        guard let apiKey else { return }
         Task {
             do {
-                try await client.sync(apiKey: apiKey, providers: AgentPreferences.enabledProviders)
+                try await client.setAPIKey(apiKey)
+                scheduleAutomaticSync()
             } catch {
                 NSLog("TokiToki: %@", Self.menuMessage(for: error))
             }
@@ -151,26 +167,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private enum AgentPreferences {
     private static let enabledProvidersKey = "enabled_providers"
 
-    static var hasAPIKey: Bool {
-        guard let data = try? Data(contentsOf: apiKeyFileURL),
-              let apiKey = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        else {
-            return false
-        }
-        return !apiKey.isEmpty
-    }
-
     static var enabledProviders: [String] {
         get {
             let saved = UserDefaults.standard.stringArray(forKey: enabledProvidersKey) ?? []
             return saved.isEmpty ? ["claude", "codex"] : saved
         }
         set { UserDefaults.standard.set(newValue, forKey: enabledProvidersKey) }
-    }
-
-    private static var apiKeyFileURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".tokitoki")
-            .appendingPathComponent("api_key")
     }
 }

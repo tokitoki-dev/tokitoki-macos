@@ -48,6 +48,24 @@ final class tracklm_macosTests: XCTestCase {
     }
 
     @MainActor
+    func testCLIClientGetsAPIKey() async throws {
+        let script = try makeFakeAgent()
+        let client = try XCTUnwrap(AgentClient(executableURL: script))
+
+        let apiKey = try await client.getAPIKey()
+
+        XCTAssertEqual(apiKey, "tokitoki_test_key")
+    }
+
+    @MainActor
+    func testCLIClientSetsAPIKey() async throws {
+        let script = try makeFakeAgent()
+        let client = try XCTUnwrap(AgentClient(executableURL: script))
+
+        try await client.setAPIKey("tokitoki_test_key")
+    }
+
+    @MainActor
     func testCLIClientRunsOneSyncOperation() async throws {
         let claudeDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("claude-test-\(UUID().uuidString)")
@@ -61,7 +79,7 @@ final class tracklm_macosTests: XCTestCase {
         let script = try makeFakeAgent()
         let client = try XCTUnwrap(AgentClient(executableURL: script))
 
-        try await client.sync(apiKey: "tokitoki_test_key", providers: ["claude"])
+        try await client.sync(providers: ["claude"])
     }
 
     private func makeFakeAgent() throws -> URL {
@@ -73,6 +91,11 @@ final class tracklm_macosTests: XCTestCase {
           test \"$2\" = 'key'
           test \"$3\" = 'tokitoki_test_key'
           printf '%s\\n' '{\"ok\":true}'
+          exit 0
+        fi
+        if [ \"$1\" = 'get' ]; then
+          test \"$2\" = 'key'
+          printf '%s\\n' 'tokitoki_test_key'
           exit 0
         fi
         test \"$1\" = '--claude-dir'

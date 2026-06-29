@@ -38,13 +38,14 @@ struct AgentClient {
                 return "Agent returned an unexpected response"
             }
         }
+
+        var isMissingAPIKey: Bool {
+            guard case let .commandFailed(_, stderr) = self else { return false }
+            return stderr.lowercased().contains("api key")
+        }
     }
 
-    func sync(apiKey: String? = nil, providers: [String]? = nil) async throws {
-        if let apiKey {
-            try await setAPIKey(apiKey)
-        }
-
+    func sync(providers: [String]? = nil) async throws {
         let arguments = AgentDataDirectories.syncArguments(for: providers ?? [])
         guard !arguments.isEmpty else { return }
         try await runSync(arguments)
@@ -60,6 +61,11 @@ struct AgentClient {
         } catch {
             throw AgentError.invalidResponse(error)
         }
+    }
+
+    func getAPIKey() async throws -> String {
+        let result = try await run(["get", "key"], input: nil)
+        return String(decoding: result.output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func runSync(_ arguments: [String]) async throws {
