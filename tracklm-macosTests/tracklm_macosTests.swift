@@ -35,6 +35,18 @@ final class tracklm_macosTests: XCTestCase {
         }
     }
 
+    func testAgentProcessDoesNotUseEnvironmentOverride() throws {
+        let script = try makeFakeAgent()
+        setenv("TOKITOKI_AGENT_BIN", script.path, 1)
+        setenv("TRACKLM_AGENT_BIN", script.path, 1)
+        addTeardownBlock {
+            unsetenv("TOKITOKI_AGENT_BIN")
+            unsetenv("TRACKLM_AGENT_BIN")
+        }
+
+        XCTAssertNotEqual(AgentProcess.resolveBinary(), script)
+    }
+
     @MainActor
     func testCLIClientRunsOneSyncOperation() async throws {
         let claudeDir = FileManager.default.temporaryDirectory

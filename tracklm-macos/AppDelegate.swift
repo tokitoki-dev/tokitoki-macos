@@ -129,7 +129,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 try await client.sync(apiKey: apiKey, providers: AgentPreferences.enabledProviders)
-                if apiKey != nil { AgentPreferences.hasAPIKey = true }
             } catch {
                 NSLog("TokiToki: %@", Self.menuMessage(for: error))
             }
@@ -150,12 +149,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 private enum AgentPreferences {
-    private static let hasAPIKeyKey = "has_api_key"
     private static let enabledProvidersKey = "enabled_providers"
 
     static var hasAPIKey: Bool {
-        get { UserDefaults.standard.bool(forKey: hasAPIKeyKey) }
-        set { UserDefaults.standard.set(newValue, forKey: hasAPIKeyKey) }
+        guard let data = try? Data(contentsOf: apiKeyFileURL),
+              let apiKey = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        else {
+            return false
+        }
+        return !apiKey.isEmpty
     }
 
     static var enabledProviders: [String] {
@@ -164,5 +166,11 @@ private enum AgentPreferences {
             return saved.isEmpty ? ["claude", "codex"] : saved
         }
         set { UserDefaults.standard.set(newValue, forKey: enabledProvidersKey) }
+    }
+
+    private static var apiKeyFileURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".tokitoki")
+            .appendingPathComponent("api_key")
     }
 }

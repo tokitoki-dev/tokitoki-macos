@@ -40,9 +40,8 @@ shows a short sync status, with **Open Dashboard**, **Settings**, and **Quit**.
 Settings provides API key and launch-at-login controls. Agents chooses the local
 clients to read (**Claude Code** and/or **Codex**).
 
-During development, `TOKITOKI_AGENT_BIN` can override the bundled executable.
-It must point at the current CLI binary (`tracklm-goagent/bin/tokitoki`), not a
-legacy HTTP daemon.
+The app always invokes the bundled CLI at
+`TokiToki.app/Contents/Resources/tokitoki`.
 
 ## MVP scope
 
