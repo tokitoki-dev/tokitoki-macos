@@ -11,6 +11,12 @@ enum AgentProvider {
         ("openclaw", "OpenClaw"),
         ("pi", "pi-agent"),
         ("amp", "Amp"),
+        ("droid", "Droid"),
+        ("kilo", "Kilo"),
+        ("hermes", "Hermes Agent"),
+        ("codebuff", "Codebuff"),
+        ("opencode", "OpenCode"),
+        ("goose", "Goose"),
     ]
 
     static var defaultIDs: [String] {

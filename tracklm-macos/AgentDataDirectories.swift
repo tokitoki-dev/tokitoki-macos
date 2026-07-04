@@ -33,6 +33,38 @@ enum AgentDataDirectories {
         case "amp":
             return configuredPaths("AMP_DATA_DIR")
                 ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/amp").path]
+        case "droid":
+            return configuredPaths("DROID_SESSIONS_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".factory/sessions").path]
+        case "kilo":
+            return configuredPaths("KILO_DATA_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/kilo").path]
+        case "hermes":
+            return configuredPaths("HERMES_HOME")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".hermes").path]
+        case "codebuff":
+            return configuredPaths("CODEBUFF_DATA_DIR")
+                ?? [
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/manicode").path,
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/manicode-dev").path,
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/manicode-staging").path,
+                ]
+        case "opencode":
+            return configuredPaths("OPENCODE_DATA_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/opencode").path]
+        case "goose":
+            if let configured = configuredPaths("GOOSE_PATH_ROOT") {
+                return configured.map {
+                    URL(fileURLWithPath: $0)
+                        .appendingPathComponent("data/sessions/sessions.db")
+                        .path
+                }
+            }
+            return [
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/goose/sessions/sessions.db").path,
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/goose/sessions/sessions.db").path,
+                FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/Block/goose/sessions/sessions.db").path,
+            ]
         default:
             return []
         }
