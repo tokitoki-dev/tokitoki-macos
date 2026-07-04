@@ -7,22 +7,47 @@ enum AgentDataDirectories {
             return claudePaths()
         case "codex":
             return codexPaths()
+        case "copilot":
+            return configuredPaths("COPILOT_OTEL_FILE_EXPORTER_PATH")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".copilot/otel").path]
+        case "gemini":
+            return configuredPaths("GEMINI_DATA_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".gemini/tmp").path]
+        case "kimi":
+            return configuredPaths("KIMI_DATA_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".kimi").path]
+        case "qwen":
+            return configuredPaths("QWEN_DATA_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".qwen").path]
+        case "openclaw":
+            return configuredPaths("OPENCLAW_DIR")
+                ?? [
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".openclaw").path,
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".clawdbot").path,
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".moltbot").path,
+                    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".moldbot").path,
+                ]
+        case "pi":
+            return configuredPaths("PI_AGENT_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pi/agent/sessions").path]
+        case "amp":
+            return configuredPaths("AMP_DATA_DIR")
+                ?? [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/amp").path]
         default:
             return []
         }
     }
 
     nonisolated static func watchPaths(for providers: [String]) -> [String] {
-        Array(Set(providers.flatMap(paths(for:)).filter(isExistingDirectory))).sorted()
+        Array(Set(providers.flatMap(paths(for:)).compactMap(existingWatchDirectory))).sorted()
     }
 
     nonisolated static func syncArguments(for providers: [String]) -> [String] {
         var arguments: [String] = []
-        if providers.contains("claude"), let path = paths(for: "claude").first(where: isExistingDirectory) {
-            arguments += ["--claude-dir", path]
-        }
-        if providers.contains("codex"), let path = paths(for: "codex").first(where: isExistingDirectory) {
-            arguments += ["--codex-dir", path]
+        for provider in providers {
+            if let path = paths(for: provider).first(where: isExistingPath) {
+                arguments += ["--provider-dir", "\(provider)=\(path)"]
+            }
         }
         return arguments
     }
@@ -56,8 +81,28 @@ enum AgentDataDirectories {
         return [home.appendingPathComponent(".codex").path]
     }
 
-    private nonisolated static func isExistingDirectory(_ path: String) -> Bool {
+    private nonisolated static func configuredPaths(_ key: String) -> [String]? {
+        guard let configured = ProcessInfo.processInfo.environment[key] else { return nil }
+        let paths = configured.split(separator: ",").map {
+            URL(fileURLWithPath: String($0).trimmingCharacters(in: .whitespaces)).path
+        }.filter { !$0.isEmpty }
+        return paths.isEmpty ? nil : paths
+    }
+
+    private nonisolated static func isExistingPath(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: path)
+    }
+
+    private nonisolated static func existingWatchDirectory(_ path: String) -> String? {
         var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
+        if isDirectory.boolValue {
+            return path
+        }
+        let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        var parentIsDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: parent, isDirectory: &parentIsDirectory),
+              parentIsDirectory.boolValue else { return nil }
+        return parent
     }
 }

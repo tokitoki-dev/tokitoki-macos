@@ -47,6 +47,25 @@ final class tracklm_macosTests: XCTestCase {
         XCTAssertNotEqual(AgentProcess.resolveBinary(), script)
     }
 
+    func testCopilotExporterFilePathUsesParentForWatchAndFileForSync() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("copilot-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("copilot.jsonl")
+        try "{}\n".write(to: file, atomically: true, encoding: .utf8)
+        setenv("COPILOT_OTEL_FILE_EXPORTER_PATH", file.path, 1)
+        addTeardownBlock {
+            unsetenv("COPILOT_OTEL_FILE_EXPORTER_PATH")
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        XCTAssertEqual(
+            AgentDataDirectories.syncArguments(for: ["copilot"]),
+            ["--provider-dir", "copilot=\(file.path)"]
+        )
+        XCTAssertEqual(AgentDataDirectories.watchPaths(for: ["copilot"]), [dir.path])
+    }
+
     @MainActor
     func testCLIClientGetsAPIKey() async throws {
         let script = try makeFakeAgent()
@@ -98,8 +117,12 @@ final class tracklm_macosTests: XCTestCase {
           printf '%s\\n' 'tokitoki_test_key'
           exit 0
         fi
-        test \"$1\" = '--claude-dir'
-        test -d \"$2\"
+        test \"$1\" = '--provider-dir'
+        case \"$2\" in
+          claude=*) path=\"${2#claude=}\" ;;
+          *) exit 1 ;;
+        esac
+        test -d \"$path\"
         printf '%s\\n' '{\"ok\":true}'
         """
         try source.write(to: script, atomically: true, encoding: .utf8)

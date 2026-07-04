@@ -1,13 +1,36 @@
 import AppKit
 
+enum AgentProvider {
+    static let all: [(id: String, title: String)] = [
+        ("claude", "Claude Code"),
+        ("codex", "Codex"),
+        ("copilot", "GitHub Copilot CLI"),
+        ("gemini", "Gemini CLI"),
+        ("kimi", "Kimi"),
+        ("qwen", "Qwen"),
+        ("openclaw", "OpenClaw"),
+        ("pi", "pi-agent"),
+        ("amp", "Amp"),
+    ]
+
+    static var defaultIDs: [String] {
+        all.map { $0.id }
+    }
+
+    static func normalize(_ providers: [String]) -> [String] {
+        let selected = Set(providers)
+        return all.map { $0.id }.filter { selected.contains($0) }
+    }
+}
+
 @MainActor
 final class MonitoredAgentsWindowController: NSWindowController {
-    private let claudeRow = MonitoredAgentRow(title: "Claude Code")
-    private let codexRow = MonitoredAgentRow(title: "Codex")
+    private let agentRows = AgentProvider.all.map { MonitoredAgentRow(provider: $0.id, title: $0.title) }
     private var onChange: (([String]) -> Void)?
 
     init() {
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 116))
+        let height = CGFloat(32 + AgentProvider.all.count * 40 + max(0, AgentProvider.all.count - 1))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: height))
         let window = NSWindow(
             contentRect: contentView.bounds,
             styleMask: [.titled, .closable],
@@ -28,8 +51,10 @@ final class MonitoredAgentsWindowController: NSWindowController {
 
     func show(enabledProviders: [String], onChange: @escaping ([String]) -> Void) {
         self.onChange = onChange
-        claudeRow.toggle.state = enabledProviders.contains("claude") ? .on : .off
-        codexRow.toggle.state = enabledProviders.contains("codex") ? .on : .off
+        let enabled = Set(enabledProviders)
+        for row in agentRows {
+            row.toggle.state = enabled.contains(row.provider) ? .on : .off
+        }
 
         NSApp.activate(ignoringOtherApps: true)
         window?.center()
@@ -38,17 +63,21 @@ final class MonitoredAgentsWindowController: NSWindowController {
     }
 
     private func configureContent(in contentView: NSView) {
-        claudeRow.toggle.target = self
-        claudeRow.toggle.action = #selector(agentToggled)
-        codexRow.toggle.target = self
-        codexRow.toggle.action = #selector(agentToggled)
+        var arrangedViews: [NSView] = []
+        for (index, row) in agentRows.enumerated() {
+            row.toggle.target = self
+            row.toggle.action = #selector(agentToggled)
+            if index > 0 {
+                let divider = NSView()
+                divider.wantsLayer = true
+                divider.layer?.backgroundColor = NSColor.separatorColor.cgColor
+                divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
+                arrangedViews.append(divider)
+            }
+            arrangedViews.append(row)
+        }
 
-        let divider = NSView()
-        divider.wantsLayer = true
-        divider.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        divider.heightAnchor.constraint(equalToConstant: 1).isActive = true
-
-        let rows = NSStackView(views: [claudeRow, divider, codexRow])
+        let rows = NSStackView(views: arrangedViews)
         rows.orientation = .vertical
         rows.alignment = .width
         rows.spacing = 0
@@ -64,6 +93,7 @@ final class MonitoredAgentsWindowController: NSWindowController {
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
             stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
             rows.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
@@ -75,25 +105,26 @@ final class MonitoredAgentsWindowController: NSWindowController {
             alert.messageText = "Select an agent"
             alert.informativeText = "At least one agent must remain monitored."
             alert.runModal()
-            claudeRow.toggle.state = .on
+            agentRows.first?.toggle.state = .on
             return
         }
         onChange?(providers)
     }
 
     private var selectedProviders: [String] {
-        [
-            claudeRow.toggle.state == .on ? "claude" : nil,
-            codexRow.toggle.state == .on ? "codex" : nil,
-        ].compactMap { $0 }
+        agentRows.compactMap { row in
+            row.toggle.state == .on ? row.provider : nil
+        }
     }
 }
 
 @MainActor
 private final class MonitoredAgentRow: NSView {
+    let provider: String
     let toggle = NSSwitch()
 
-    init(title: String) {
+    init(provider: String, title: String) {
+        self.provider = provider
         super.init(frame: .zero)
 
         let titleLabel = NSTextField(labelWithString: title)

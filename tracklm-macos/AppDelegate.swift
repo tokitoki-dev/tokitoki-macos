@@ -170,8 +170,9 @@ private enum AgentPreferences {
     static var enabledProviders: [String] {
         get {
             let saved = UserDefaults.standard.stringArray(forKey: enabledProvidersKey) ?? []
-            return saved.isEmpty ? ["claude", "codex"] : saved
+            let normalized = AgentProvider.normalize(saved)
+            return normalized.isEmpty ? AgentProvider.defaultIDs : normalized
         }
-        set { UserDefaults.standard.set(newValue, forKey: enabledProvidersKey) }
+        set { UserDefaults.standard.set(AgentProvider.normalize(newValue), forKey: enabledProvidersKey) }
     }
 }
