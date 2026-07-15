@@ -1,6 +1,11 @@
 import Foundation
 
 enum AgentDataDirectories {
+    nonisolated static let allProviders: [String] = [
+        "claude", "codex", "copilot", "gemini", "kimi", "qwen", "openclaw",
+        "pi", "amp", "droid", "kilo", "hermes", "codebuff", "opencode", "goose",
+    ]
+
     nonisolated static func paths(for provider: String) -> [String] {
         switch provider {
         case "claude":
@@ -70,13 +75,13 @@ enum AgentDataDirectories {
         }
     }
 
-    nonisolated static func watchPaths(for providers: [String]) -> [String] {
-        Array(Set(providers.flatMap(paths(for:)).compactMap(existingWatchDirectory))).sorted()
+    nonisolated static func watchPaths() -> [String] {
+        Array(Set(allProviders.flatMap(paths(for:)).compactMap(existingWatchDirectory))).sorted()
     }
 
-    nonisolated static func syncArguments(for providers: [String]) -> [String] {
+    nonisolated static func syncArguments() -> [String] {
         var arguments: [String] = []
-        for provider in providers {
+        for provider in allProviders {
             if let path = paths(for: provider).first(where: isExistingPath) {
                 arguments += ["--provider-dir", "\(provider)=\(path)"]
             }

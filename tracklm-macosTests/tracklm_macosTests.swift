@@ -59,11 +59,8 @@ final class tracklm_macosTests: XCTestCase {
             try? FileManager.default.removeItem(at: dir)
         }
 
-        XCTAssertEqual(
-            AgentDataDirectories.syncArguments(for: ["copilot"]),
-            ["--provider-dir", "copilot=\(file.path)"]
-        )
-        XCTAssertEqual(AgentDataDirectories.watchPaths(for: ["copilot"]), [dir.path])
+        XCTAssertTrue(AgentDataDirectories.syncArguments().contains("copilot=\(file.path)"))
+        XCTAssertTrue(AgentDataDirectories.watchPaths().contains(dir.path))
     }
 
     @MainActor
@@ -98,7 +95,7 @@ final class tracklm_macosTests: XCTestCase {
         let script = try makeFakeAgent()
         let client = try XCTUnwrap(AgentClient(executableURL: script))
 
-        try await client.sync(providers: ["claude"])
+        try await client.sync()
     }
 
     private func makeFakeAgent() throws -> URL {

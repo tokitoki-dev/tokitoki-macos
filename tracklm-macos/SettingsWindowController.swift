@@ -5,10 +5,12 @@ final class SettingsWindowController: NSWindowController {
     private let apiKeyField = NSTextField(frame: .zero)
     private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
     private let versionLabel = NSTextField(labelWithString: "")
+    private let updatesButton = NSButton(title: "Check for Updates…", target: nil, action: nil)
     private var saveAPIKey: ((String?) -> Void)?
+    private var checkForUpdates: (() -> Void)?
 
     init() {
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 360))
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 0))
         let window = NSWindow(
             contentRect: contentView.bounds,
             styleMask: [.titled, .closable],
@@ -21,14 +23,22 @@ final class SettingsWindowController: NSWindowController {
 
         super.init(window: window)
         configureContent(in: contentView)
+        window.setContentSize(NSSize(width: 420, height: contentView.fittingSize.height))
     }
 
     required init?(coder: NSCoder) {
         nil
     }
 
-    func show(apiKey: String?, saveAPIKey: @escaping (String?) -> Void) {
+    func show(
+        apiKey: String?,
+        canCheckForUpdates: Bool,
+        checkForUpdates: @escaping () -> Void,
+        saveAPIKey: @escaping (String?) -> Void
+    ) {
         self.saveAPIKey = saveAPIKey
+        self.checkForUpdates = checkForUpdates
+        updatesButton.isEnabled = canCheckForUpdates
         apiKeyField.stringValue = apiKey ?? ""
         apiKeyField.placeholderString = "Paste your API key"
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
@@ -59,29 +69,46 @@ final class SettingsWindowController: NSWindowController {
         let saveButton = NSButton(title: "Save", target: self, action: #selector(save))
         saveButton.keyEquivalent = "\r"
         let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancel))
-        let buttonRow = NSStackView(views: [cancelButton, saveButton])
-        buttonRow.orientation = .horizontal
-        buttonRow.alignment = .centerY
-        buttonRow.distribution = .gravityAreas
-        buttonRow.spacing = 8
 
         versionLabel.textColor = .secondaryLabelColor
         versionLabel.font = .systemFont(ofSize: 11)
 
-        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, versionLabel, buttonRow])
+        updatesButton.target = self
+        updatesButton.action = #selector(runUpdateCheck)
+
+        let updatesRow = NSStackView(views: [updatesButton, versionLabel])
+        updatesRow.orientation = .horizontal
+        updatesRow.alignment = .centerY
+        updatesRow.spacing = 8
+
+        let bottomRow = NSStackView()
+        bottomRow.orientation = .horizontal
+        bottomRow.alignment = .centerY
+        bottomRow.spacing = 8
+        bottomRow.addView(cancelButton, in: .trailing)
+        bottomRow.addView(saveButton, in: .trailing)
+
+        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, updatesRow, bottomRow])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
+        stack.spacing = 12
+        stack.setCustomSpacing(6, after: apiKeyLabel)
+        stack.setCustomSpacing(20, after: updatesRow)
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 56),
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 60),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -60),
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
             apiKeyField.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            buttonRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            bottomRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
+    }
+
+    @objc private func runUpdateCheck() {
+        checkForUpdates?()
     }
 
     @objc private func launchAtLoginChanged() {

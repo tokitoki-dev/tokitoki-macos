@@ -9,17 +9,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var syncQueued = false
     private var client: AgentClient?
     private let settingsWindowController = SettingsWindowController()
-    private let monitoredAgentsWindowController = MonitoredAgentsWindowController()
     private lazy var usageMonitor = AIUsageMonitor { [weak self] in
         self?.scheduleAutomaticSync()
     }
 
     private let updater = Updater()
 
+    private let enabledSwitch = NSSwitch()
     private let dashboardMenuItem = NSMenuItem(title: "Dashboard", action: #selector(openDashboard), keyEquivalent: "")
-    private let monitoredAgentsMenuItem = NSMenuItem(title: "Agents", action: #selector(openMonitoredAgents), keyEquivalent: "")
     private let settingsMenuItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
-    private let updatesMenuItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -32,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await AgentProcess.bootstrap()
             guard let self else { return }
             client = AgentClient()
-            usageMonitor.start(providers: AgentPreferences.enabledProviders)
+            startMonitoringIfEnabled()
             scheduleAutomaticSync()
             // Silent, and fully owned by the CLI itself — the app only asks.
             await AgentProcess.upgradeSharedCLI()
@@ -77,11 +75,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func buildMenu() {
         let menu = NSMenu()
         menu.minimumWidth = 175
+        menu.addItem(makeEnabledMenuItem())
         menu.addItem(dashboardMenuItem)
-        menu.addItem(monitoredAgentsMenuItem)
         menu.addItem(settingsMenuItem)
-        menu.addItem(.separator())
-        menu.addItem(updatesMenuItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: ""))
 
@@ -90,6 +86,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.image = nil
         }
         statusItem.menu = menu
+    }
+
+    private func makeEnabledMenuItem() -> NSMenuItem {
+        let label = NSTextField(labelWithString: "Enabled")
+        label.font = .menuFont(ofSize: NSFont.systemFontSize(for: .regular))
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        enabledSwitch.controlSize = .small
+        enabledSwitch.state = AgentPreferences.trackingEnabled ? .on : .off
+        enabledSwitch.target = self
+        enabledSwitch.action = #selector(enabledToggled)
+        enabledSwitch.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView()
+        container.addSubview(label)
+        container.addSubview(enabledSwitch)
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 28),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            enabledSwitch.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            enabledSwitch.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+
+        let item = NSMenuItem()
+        item.view = container
+        return item
+    }
+
+    @objc private func enabledToggled() {
+        AgentPreferences.trackingEnabled = enabledSwitch.state == .on
+        if AgentPreferences.trackingEnabled {
+            startMonitoringIfEnabled()
+            scheduleAutomaticSync()
+        } else {
+            usageMonitor.stop()
+        }
+    }
+
+    private func startMonitoringIfEnabled() {
+        guard AgentPreferences.trackingEnabled else { return }
+        usageMonitor.start()
     }
 
     private func scheduleAutomaticSync() {
@@ -117,11 +155,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func syncAutomatically() async {
-        guard let client else { return }
+        guard AgentPreferences.trackingEnabled, let client else { return }
 
         do {
             guard !(try await client.getAPIKey()).isEmpty else { return }
-            try await client.sync(providers: AgentPreferences.enabledProviders)
+            try await client.sync()
         } catch let error as AgentClient.AgentError where error.isMissingAPIKey {
             return
         } catch {
@@ -141,20 +179,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 apiKey = nil
                 NSLog("TokiToki: %@", Self.menuMessage(for: error))
             }
-            self?.settingsWindowController.show(
-                apiKey: apiKey
+            guard let self else { return }
+            settingsWindowController.show(
+                apiKey: apiKey,
+                canCheckForUpdates: updater.canCheckForUpdates,
+                checkForUpdates: { [weak self] in self?.updater.checkForUpdates() }
             ) { [weak self] apiKey in
                 self?.saveAPIKey(apiKey)
             }
-        }
-    }
-
-    @objc private func openMonitoredAgents() {
-        monitoredAgentsWindowController.show(enabledProviders: AgentPreferences.enabledProviders) { [weak self] providers in
-            guard let self else { return }
-            AgentPreferences.enabledProviders = providers
-            usageMonitor.start(providers: providers)
-            scheduleAutomaticSync()
         }
     }
 
@@ -175,23 +207,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// which a one-shot `isEnabled` set at launch certainly would.
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(checkForUpdates):
-            // Sparkle refuses a check while one is running or an install is
-            // staged. Say so, rather than offering a click that does nothing.
-            return updater.canCheckForUpdates
-        case #selector(openSettings), #selector(openMonitoredAgents):
+        case #selector(openSettings):
             return client != nil
         default:
             return true
         }
     }
 
-    @objc private func checkForUpdates() {
-        updater.checkForUpdates()
-    }
-
     @objc private func openDashboard() {
-        NSWorkspace.shared.open(AppConfig.serverURL)
+        Task { [weak self] in
+            // Signed-in when possible, plain dashboard when not: no API key,
+            // no network, or an old server all land on the login page — which
+            // is exactly what this menu item did before.
+            if let client = self?.client, let url = try? await client.dashboardURL() {
+                NSWorkspace.shared.open(url)
+            } else {
+                NSWorkspace.shared.open(AppConfig.serverURL)
+            }
+        }
     }
 
     @objc private func quit() {
@@ -204,14 +237,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 private enum AgentPreferences {
-    private static let enabledProvidersKey = "enabled_providers"
+    private static let trackingEnabledKey = "tracking_enabled"
 
-    static var enabledProviders: [String] {
-        get {
-            let saved = UserDefaults.standard.stringArray(forKey: enabledProvidersKey) ?? []
-            let normalized = AgentProvider.normalize(saved)
-            return normalized.isEmpty ? AgentProvider.defaultIDs : normalized
-        }
-        set { UserDefaults.standard.set(AgentProvider.normalize(newValue), forKey: enabledProvidersKey) }
+    static var trackingEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: trackingEnabledKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: trackingEnabledKey) }
     }
 }

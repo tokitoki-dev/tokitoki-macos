@@ -14,9 +14,9 @@ final class AIUsageMonitor {
         self.onChange = onChange
     }
 
-    func start(providers: [String]) {
+    func start() {
         stop()
-        let paths = AgentDataDirectories.watchPaths(for: providers)
+        let paths = AgentDataDirectories.watchPaths()
         guard !paths.isEmpty else { return }
 
         var context = FSEventStreamContext(

@@ -45,8 +45,8 @@ struct AgentClient {
         }
     }
 
-    func sync(providers: [String]? = nil) async throws {
-        let arguments = AgentDataDirectories.syncArguments(for: providers ?? [])
+    func sync() async throws {
+        let arguments = AgentDataDirectories.syncArguments()
         guard !arguments.isEmpty else { return }
         try await runSync(arguments)
     }
@@ -66,6 +66,18 @@ struct AgentClient {
     func getAPIKey() async throws -> String {
         let result = try await run(["get", "key"], input: nil)
         return String(decoding: result.output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A one-time URL that opens the web dashboard already signed in. The CLI
+    /// exchanges the stored API key for it server-side; the key itself never
+    /// appears in the URL.
+    func dashboardURL() async throws -> URL {
+        let result = try await run(["get", "dashboard-url"], input: nil)
+        let raw = String(decoding: result.output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: raw), url.scheme == "http" || url.scheme == "https" else {
+            throw AgentError.invalidResponse(URLError(.badURL))
+        }
+        return url
     }
 
     private func runSync(_ arguments: [String]) async throws {
