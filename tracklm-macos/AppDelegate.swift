@@ -13,9 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self?.scheduleAutomaticSync()
     }
 
+    private let updater = Updater()
+
     private let dashboardMenuItem = NSMenuItem(title: "Dashboard", action: #selector(openDashboard), keyEquivalent: "")
     private let monitoredAgentsMenuItem = NSMenuItem(title: "Agents", action: #selector(openMonitoredAgents), keyEquivalent: "")
     private let settingsMenuItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
+    private let updatesMenuItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -23,7 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         buildMenu()
         client = AgentClient()
-        render()
         usageMonitor.start(providers: AgentPreferences.enabledProviders)
         scheduleAutomaticSync()
         refreshTimer = Timer.scheduledTimer(
@@ -61,6 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(dashboardMenuItem)
         menu.addItem(monitoredAgentsMenuItem)
         menu.addItem(settingsMenuItem)
+        menu.addItem(.separator())
+        menu.addItem(updatesMenuItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: ""))
 
@@ -102,11 +106,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("TokiToki: %@", Self.menuMessage(for: error))
         }
-    }
-
-    private func render() {
-        settingsMenuItem.isEnabled = client != nil
-        monitoredAgentsMenuItem.isEnabled = client != nil
     }
 
     @objc private func openSettings() {
@@ -151,8 +150,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// AppKit asks every time the menu opens, so the state cannot go stale —
+    /// which a one-shot `isEnabled` set at launch certainly would.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        switch item.action {
+        case #selector(checkForUpdates):
+            // Sparkle refuses a check while one is running or an install is
+            // staged. Say so, rather than offering a click that does nothing.
+            return updater.canCheckForUpdates
+        case #selector(openSettings), #selector(openMonitoredAgents):
+            return client != nil
+        default:
+            return true
+        }
+    }
+
+    @objc private func checkForUpdates() {
+        updater.checkForUpdates()
+    }
+
     @objc private func openDashboard() {
-        NSWorkspace.shared.open(URL(string: "http://localhost:9093")!)
+        NSWorkspace.shared.open(AppConfig.serverURL)
     }
 
     @objc private func quit() {

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Only the keys Xcode will not generate for us.
+
+	  Everything else — CFBundleShortVersionString, LSUIElement, the identifier —
+	  stays under GENERATE_INFOPLIST_FILE, which merges this file into what it
+	  produces. Custom keys are the one thing it cannot do: INFOPLIST_KEY_<name>
+	  works only for names Xcode already knows, and silently drops the rest.
+	  We shipped exactly that bug once — a build whose Sparkle keys were simply
+	  absent — so these live in a real file where their presence is checkable.
+
+	  The values come from build settings, so Debug can point at a dev server
+	  and Release at production without two copies of this file.
+	-->
+
+	<!-- Sparkle: the EdDSA public key it verifies every update against. Its
+	     private half signs the releases. See the release runbook in README. -->
+	<key>SUPublicEDKey</key>
+	<string>$(TOKITOKI_SPARKLE_PUBLIC_KEY)</string>
+
+	<!-- No SUFeedURL: the app is one universal binary but an appcast describes
+	     one architecture, so the feed can only be known at runtime. Updater.swift
+	     supplies it. -->
+
+	<!-- Where this build's server lives. The dashboard link and the update feed
+	     are both derived from it, so a build cannot check one host for updates
+	     while sending its user to another. -->
+	<key>TokiTokiServerURL</key>
+	<string>$(TOKITOKI_SERVER_URL)</string>
+</dict>
+</plist>
