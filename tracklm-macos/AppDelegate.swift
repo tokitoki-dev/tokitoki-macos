@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var refreshTimer: Timer?
+    private var cliUpgradeTimer: Timer?
     private var syncTask: Task<Void, Never>?
     private var syncQueued = false
     private var client: AgentClient?
@@ -25,13 +26,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItemIcon()
 
         buildMenu()
-        client = AgentClient()
-        usageMonitor.start(providers: AgentPreferences.enabledProviders)
-        scheduleAutomaticSync()
+        Task { [weak self] in
+            // Seed the shared CLI before the first resolution, so the client
+            // binds to the shared copy rather than the bundled fallback.
+            await AgentProcess.bootstrap()
+            guard let self else { return }
+            client = AgentClient()
+            usageMonitor.start(providers: AgentPreferences.enabledProviders)
+            scheduleAutomaticSync()
+            // Silent, and fully owned by the CLI itself — the app only asks.
+            await AgentProcess.upgradeSharedCLI()
+        }
         refreshTimer = Timer.scheduledTimer(
             timeInterval: 30 * 60,
             target: self,
             selector: #selector(triggerAutomaticSync),
+            userInfo: nil,
+            repeats: true
+        )
+        cliUpgradeTimer = Timer.scheduledTimer(
+            timeInterval: 24 * 60 * 60,
+            target: self,
+            selector: #selector(triggerCLIUpgrade),
             userInfo: nil,
             repeats: true
         )
@@ -53,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         refreshTimer?.invalidate()
+        cliUpgradeTimer?.invalidate()
         syncTask?.cancel()
         usageMonitor.stop()
     }
@@ -93,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func triggerAutomaticSync() {
         scheduleAutomaticSync()
+    }
+
+    @objc private func triggerCLIUpgrade() {
+        Task { await AgentProcess.upgradeSharedCLI() }
     }
 
     private func syncAutomatically() async {
