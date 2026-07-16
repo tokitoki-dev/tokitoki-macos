@@ -25,6 +25,7 @@ final class SettingsWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
 
         super.init(window: window)
+        window.delegate = self
         configureContent(in: contentView)
         window.setContentSize(NSSize(width: 420, height: contentView.fittingSize.height))
     }
@@ -43,7 +44,8 @@ final class SettingsWindowController: NSWindowController {
         autoUpdateCheckbox.state = updater.automaticallyChecksForUpdates ? .on : .off
         checkNowButton.isEnabled = updater.canCheckForUpdates
         refreshLastCheck()
-        apiKeyField.stringValue = apiKey ?? ""
+        shownAPIKey = apiKey ?? ""
+        apiKeyField.stringValue = shownAPIKey
         apiKeyField.placeholderString = "Paste your API key"
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
 
@@ -70,10 +72,6 @@ final class SettingsWindowController: NSWindowController {
         launchAtLoginCheckbox.target = self
         launchAtLoginCheckbox.action = #selector(launchAtLoginChanged)
 
-        let saveButton = NSButton(title: "Save", target: self, action: #selector(save))
-        saveButton.keyEquivalent = "\r"
-        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancel))
-
         versionLabel.textColor = .secondaryLabelColor
         versionLabel.font = .systemFont(ofSize: 11)
 
@@ -87,6 +85,11 @@ final class SettingsWindowController: NSWindowController {
         let separator = NSBox()
         separator.boxType = .separator
 
+        let updatesLeftColumn = NSStackView(views: [autoUpdateCheckbox, versionLabel])
+        updatesLeftColumn.orientation = .vertical
+        updatesLeftColumn.alignment = .leading
+        updatesLeftColumn.spacing = 8
+
         let checkNowColumn = NSStackView(views: [checkNowButton, lastCheckLabel])
         checkNowColumn.orientation = .vertical
         checkNowColumn.alignment = .trailing
@@ -95,25 +98,16 @@ final class SettingsWindowController: NSWindowController {
         let updatesRow = NSStackView()
         updatesRow.orientation = .horizontal
         updatesRow.alignment = .top
-        updatesRow.addView(autoUpdateCheckbox, in: .leading)
+        updatesRow.addView(updatesLeftColumn, in: .leading)
         updatesRow.addView(checkNowColumn, in: .trailing)
 
-        let bottomRow = NSStackView()
-        bottomRow.orientation = .horizontal
-        bottomRow.alignment = .centerY
-        bottomRow.spacing = 8
-        bottomRow.addView(versionLabel, in: .leading)
-        bottomRow.addView(cancelButton, in: .trailing)
-        bottomRow.addView(saveButton, in: .trailing)
-
-        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, separator, updatesRow, bottomRow])
+        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, separator, updatesRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
         stack.setCustomSpacing(6, after: apiKeyLabel)
         stack.setCustomSpacing(16, after: launchAtLoginCheckbox)
         stack.setCustomSpacing(16, after: separator)
-        stack.setCustomSpacing(20, after: updatesRow)
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
 
@@ -125,7 +119,6 @@ final class SettingsWindowController: NSWindowController {
             apiKeyField.widthAnchor.constraint(equalTo: stack.widthAnchor),
             separator.widthAnchor.constraint(equalTo: stack.widthAnchor),
             updatesRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            bottomRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
 
@@ -159,13 +152,14 @@ final class SettingsWindowController: NSWindowController {
         }
     }
 
-    @objc private func save() {
-        let apiKey = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        saveAPIKey?(apiKey.isEmpty ? nil : apiKey)
-        close()
-    }
+}
 
-    @objc private func cancel() {
-        close()
+extension SettingsWindowController: NSWindowDelegate {
+    // Settings apply immediately; the API key is the one field with a commit
+    // point, and that point is closing the window.
+    func windowWillClose(_ notification: Notification) {
+        let apiKey = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard apiKey != shownAPIKey else { return }
+        saveAPIKey?(apiKey.isEmpty ? nil : apiKey)
     }
 }
