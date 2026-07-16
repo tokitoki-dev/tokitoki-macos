@@ -114,25 +114,39 @@ enum AgentProcess {
     }
 
     private static func run(_ binary: URL, arguments: [String]) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            let output = Pipe()
-            process.executableURL = binary
-            process.arguments = arguments
-            process.standardOutput = output
-            process.standardError = FileHandle.nullDevice
-            process.terminationHandler = { completed in
-                let data = output.fileHandleForReading.readDataToEndOfFile()
-                guard completed.terminationStatus == 0 else {
-                    continuation.resume(throwing: POSIXError(.EIO))
-                    return
-                }
-                continuation.resume(returning: String(decoding: data, as: UTF8.self))
-            }
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: error)
+        let process = Process()
+        let output = Pipe()
+        process.executableURL = binary
+        process.arguments = arguments
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+
+        let (exit, exitContinuation) = AsyncStream.makeStream(of: Int32.self)
+        process.terminationHandler = { completed in
+            exitContinuation.yield(completed.terminationStatus)
+            exitContinuation.finish()
+        }
+
+        try process.run()
+
+        // Drain stdout while the process runs. Waiting for termination first
+        // would deadlock as soon as the CLI writes a pipe buffer's worth: it
+        // blocks on a full pipe, and the exit never comes.
+        async let data = readToEnd(output)
+
+        var status: Int32 = -1
+        for await exitStatus in exit {
+            status = exitStatus
+        }
+
+        guard status == 0 else { throw POSIXError(.EIO) }
+        return String(decoding: await data, as: UTF8.self)
+    }
+
+    private static func readToEnd(_ pipe: Pipe) async -> Data {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                continuation.resume(returning: pipe.fileHandleForReading.readDataToEndOfFile())
             }
         }
     }

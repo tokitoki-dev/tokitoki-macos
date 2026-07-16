@@ -13,6 +13,7 @@ struct AgentClient {
     enum AgentError: LocalizedError {
         case commandFailed(status: Int32, stderr: String)
         case invalidResponse(Error)
+        case rejected
 
         var errorDescription: String? {
             switch self {
@@ -20,6 +21,8 @@ struct AgentClient {
                 return "TokiToki upload failed (exit \(status))."
             case let .invalidResponse(error):
                 return "TokiToki returned invalid JSON: \(error.localizedDescription)"
+            case .rejected:
+                return "TokiToki reported failure."
             }
         }
 
@@ -34,7 +37,7 @@ struct AgentClient {
                     return "Local usage database is busy"
                 }
                 return "Unable to sync local usage"
-            case .invalidResponse:
+            case .invalidResponse, .rejected:
                 return "Agent returned an unexpected response"
             }
         }
@@ -48,19 +51,11 @@ struct AgentClient {
     func sync() async throws {
         let arguments = AgentDataDirectories.syncArguments()
         guard !arguments.isEmpty else { return }
-        try await runSync(arguments)
+        try requireOK(try await run(arguments, input: nil))
     }
 
     func setAPIKey(_ apiKey: String) async throws {
-        let result = try await run(["set", "key", apiKey], input: nil)
-        do {
-            let response = try JSONDecoder().decode(SyncResponse.self, from: result.output)
-            guard response.ok else { throw AgentError.invalidResponse(AgentError.commandFailed(status: 1, stderr: "")) }
-        } catch let error as AgentError {
-            throw error
-        } catch {
-            throw AgentError.invalidResponse(error)
-        }
+        try requireOK(try await run(["set", "key", apiKey], input: nil))
     }
 
     func getAPIKey() async throws -> String {
@@ -80,52 +75,65 @@ struct AgentClient {
         return url
     }
 
-    private func runSync(_ arguments: [String]) async throws {
-        let result = try await run(arguments, input: nil)
+    /// The CLI exited 0 but its JSON answer decides success: `{"ok":true}`.
+    private func requireOK(_ result: CommandResult) throws {
+        let response: SyncResponse
         do {
-            let response = try JSONDecoder().decode(SyncResponse.self, from: result.output)
-            guard response.ok else { throw AgentError.invalidResponse(AgentError.commandFailed(status: 1, stderr: "")) }
-        } catch let error as AgentError {
-            throw error
+            response = try JSONDecoder().decode(SyncResponse.self, from: result.output)
         } catch {
             throw AgentError.invalidResponse(error)
         }
+        guard response.ok else { throw AgentError.rejected }
     }
 
     private func run(_ arguments: [String], input: Data?) async throws -> CommandResult {
-        let executableURL = executableURL
-        return try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            let output = Pipe()
-            let errors = Pipe()
-            let inputPipe = input.map { _ in Pipe() }
+        let process = Process()
+        let output = Pipe()
+        let errors = Pipe()
+        let inputPipe = input.map { _ in Pipe() }
 
-            process.executableURL = executableURL
-            process.arguments = arguments
-            process.standardOutput = output
-            process.standardError = errors
-            process.standardInput = inputPipe
-            process.terminationHandler = { completedProcess in
-                let stdout = output.fileHandleForReading.readDataToEndOfFile()
-                let stderr = errors.fileHandleForReading.readDataToEndOfFile()
-                guard completedProcess.terminationStatus == 0 else {
-                    continuation.resume(throwing: AgentError.commandFailed(
-                        status: completedProcess.terminationStatus,
-                        stderr: String(decoding: stderr, as: UTF8.self)
-                    ))
-                    return
-                }
-                continuation.resume(returning: CommandResult(output: stdout))
-            }
+        process.executableURL = executableURL
+        process.arguments = arguments
+        process.standardOutput = output
+        process.standardError = errors
+        process.standardInput = inputPipe
 
-            do {
-                try process.run()
-                if let input, let inputPipe {
-                    inputPipe.fileHandleForWriting.write(input)
-                    try? inputPipe.fileHandleForWriting.close()
-                }
-            } catch {
-                continuation.resume(throwing: error)
+        let (exit, exitContinuation) = AsyncStream.makeStream(of: Int32.self)
+        process.terminationHandler = { completed in
+            exitContinuation.yield(completed.terminationStatus)
+            exitContinuation.finish()
+        }
+
+        try process.run()
+        if let input, let inputPipe {
+            inputPipe.fileHandleForWriting.write(input)
+            try? inputPipe.fileHandleForWriting.close()
+        }
+
+        // Drain both pipes while the process runs. Waiting for termination
+        // first would deadlock as soon as the CLI writes a pipe buffer's
+        // worth: it blocks on a full pipe, and the exit never comes.
+        async let stdout = Self.readToEnd(output)
+        async let stderr = Self.readToEnd(errors)
+
+        var status: Int32 = -1
+        for await exitStatus in exit {
+            status = exitStatus
+        }
+
+        guard status == 0 else {
+            throw AgentError.commandFailed(
+                status: status,
+                stderr: String(decoding: await stderr, as: UTF8.self)
+            )
+        }
+        return CommandResult(output: await stdout)
+    }
+
+    private static func readToEnd(_ pipe: Pipe) async -> Data {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                continuation.resume(returning: pipe.fileHandleForReading.readDataToEndOfFile())
             }
         }
     }

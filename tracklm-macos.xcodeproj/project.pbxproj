@@ -33,9 +33,22 @@
 		B0B1ABA22FD2C142000D4EB1 /* tracklm-macosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "tracklm-macosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B0B1AC0A2FD2C142000D4EB1 /* Exceptions for "tracklm-macos" folder in "tracklm-macos" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B0B1AB8A2FD2C141000D4EB1 /* tracklm-macos */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B0B1AB8D2FD2C141000D4EB1 /* tracklm-macos */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B0B1AC0A2FD2C142000D4EB1 /* Exceptions for "tracklm-macos" folder in "tracklm-macos" target */,
+			);
 			path = "tracklm-macos";
 			sourceTree = "<group>";
 		};
@@ -202,11 +215,11 @@
 			);
 			mainGroup = B0B1AB822FD2C141000D4EB1;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
-			productRefGroup = B0B1AB8C2FD2C141000D4EB1 /* Products */;
 			packageReferences = (
 				B0B1AC012FD2C142000D4EB1 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B0B1AB8C2FD2C141000D4EB1 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

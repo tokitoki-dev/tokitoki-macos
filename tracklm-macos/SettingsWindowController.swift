@@ -140,7 +140,6 @@ final class SettingsWindowController: NSWindowController {
 
     @objc private func runUpdateCheck() {
         updater?.checkForUpdates()
-        refreshLastCheck()
     }
 
     @objc private func launchAtLoginChanged() {
@@ -161,5 +160,13 @@ extension SettingsWindowController: NSWindowDelegate {
         let apiKey = apiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard apiKey != shownAPIKey else { return }
         saveAPIKey?(apiKey.isEmpty ? nil : apiKey)
+    }
+
+    // Sparkle's check runs in its own windows; when focus returns here the
+    // "Last check" date and the button's availability may both have moved.
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard let updater else { return }
+        checkNowButton.isEnabled = updater.canCheckForUpdates
+        refreshLastCheck()
     }
 }

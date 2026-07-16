@@ -205,17 +205,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// AppKit asks every time the menu opens, so the state cannot go stale —
-    /// which a one-shot `isEnabled` set at launch certainly would.
-    func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        switch item.action {
-        case #selector(openSettings):
-            return client != nil
-        default:
-            return true
-        }
-    }
-
     @objc private func openDashboard() {
         Task { [weak self] in
             // Signed-in when possible, plain dashboard when not: no API key,
@@ -235,6 +224,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static func menuMessage(for error: Error) -> String {
         (error as? AgentClient.AgentError)?.menuMessage ?? "Agent unavailable"
+    }
+}
+
+extension AppDelegate: NSMenuItemValidation {
+    /// AppKit asks every time the menu opens, so the state cannot go stale —
+    /// which a one-shot `isEnabled` set at launch certainly would. The formal
+    /// conformance is load-bearing: without it Swift never exposes the method
+    /// to the ObjC runtime and AppKit silently stops asking.
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        switch item.action {
+        case #selector(openSettings):
+            return client != nil
+        default:
+            return true
+        }
     }
 }
 
