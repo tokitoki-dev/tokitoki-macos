@@ -38,6 +38,16 @@ final class Updater {
     var canCheckForUpdates: Bool {
         controller.updater.canCheckForUpdates
     }
+
+    /// Sparkle owns the schedule and persists this itself.
+    var automaticallyChecksForUpdates: Bool {
+        get { controller.updater.automaticallyChecksForUpdates }
+        set { controller.updater.automaticallyChecksForUpdates = newValue }
+    }
+
+    var lastUpdateCheckDate: Date? {
+        controller.updater.lastUpdateCheckDate
+    }
 }
 
 /// Supplies the feed URL for the architecture this process is running as.

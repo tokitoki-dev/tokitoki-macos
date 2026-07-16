@@ -1,6 +1,4 @@
 import AppKit
-import Combine
-import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -17,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let updater = Updater()
 
-    private let enabledModel = EnabledMenuModel(isOn: AgentPreferences.trackingEnabled)
+    private let enabledSwitch = MenuSwitch()
     private let dashboardMenuItem = NSMenuItem(title: "Dashboard", action: #selector(openDashboard), keyEquivalent: "")
     private let settingsMenuItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: "")
 
@@ -25,16 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         configureStatusItemIcon()
 
-        enabledModel.onChange = { [weak self] isOn in
-            guard let self else { return }
-            AgentPreferences.trackingEnabled = isOn
-            if isOn {
-                startMonitoringIfEnabled()
-                scheduleAutomaticSync()
-            } else {
-                usageMonitor.stop()
-            }
-        }
         buildMenu()
         Task { [weak self] in
             // Seed the shared CLI before the first resolution, so the client
@@ -97,19 +85,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.target = self
             item.image = nil
         }
+        menu.delegate = self
         statusItem.menu = menu
     }
 
     private func makeEnabledMenuItem() -> NSMenuItem {
-        // NSMenu sizes a custom item by the view's frame, so the hosting view
+        let label = NSTextField(labelWithString: "Tokitoki")
+        label.font = .menuFont(ofSize: NSFont.systemFontSize(for: .regular))
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        enabledSwitch.controlSize = .small
+        enabledSwitch.state = AgentPreferences.trackingEnabled ? .on : .off
+        enabledSwitch.target = self
+        enabledSwitch.action = #selector(enabledToggled)
+        enabledSwitch.translatesAutoresizingMaskIntoConstraints = false
+
+        // NSMenu sizes a custom item by the view's frame, so the container
         // needs a real one; width tracks the menu via autoresizing.
-        let hosting = NSHostingView(rootView: EnabledMenuRow(model: enabledModel))
-        hosting.frame = NSRect(x: 0, y: 0, width: 175, height: 28)
-        hosting.autoresizingMask = [.width]
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 28))
+        container.autoresizingMask = [.width]
+        container.addSubview(label)
+        container.addSubview(enabledSwitch)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
+            label.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            enabledSwitch.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
+            enabledSwitch.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
 
         let item = NSMenuItem()
-        item.view = hosting
+        item.view = container
         return item
+    }
+
+    @objc private func enabledToggled() {
+        AgentPreferences.trackingEnabled = enabledSwitch.state == .on
+        if AgentPreferences.trackingEnabled {
+            startMonitoringIfEnabled()
+            scheduleAutomaticSync()
+        } else {
+            usageMonitor.stop()
+        }
     }
 
     private func startMonitoringIfEnabled() {
@@ -169,8 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             settingsWindowController.show(
                 apiKey: apiKey,
-                canCheckForUpdates: updater.canCheckForUpdates,
-                checkForUpdates: { [weak self] in self?.updater.checkForUpdates() }
+                updater: updater
             ) { [weak self] apiKey in
                 self?.saveAPIKey(apiKey)
             }
@@ -223,35 +238,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@MainActor
-private final class EnabledMenuModel: ObservableObject {
-    @Published var isOn: Bool {
-        didSet { onChange?(isOn) }
-    }
-    var onChange: ((Bool) -> Void)?
-
-    init(isOn: Bool) {
-        self.isOn = isOn
+extension AppDelegate: NSMenuDelegate {
+    // NSSwitch draws gray while the app is inactive, and a menu bar app is
+    // inactive whenever its menu opens. Activating here makes the switch pick
+    // up the system accent color — the same trick Tailscale uses.
+    func menuWillOpen(_ menu: NSMenu) {
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
-private struct EnabledMenuRow: View {
-    @ObservedObject var model: EnabledMenuModel
-
-    var body: some View {
-        HStack {
-            Text("Enabled")
-                .font(.system(size: 13))
-            Spacer()
-            Toggle("Enabled", isOn: $model.isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-        }
-        .padding(.horizontal, 14)
-        // The menu of a status-bar app never belongs to the key window, and an
-        // inactive-looking NSSwitch draws gray instead of the accent color.
-        .environment(\.appearsActive, true)
+/// In a menu the app may not be active on the first click yet; without this
+/// the switch would swallow that click instead of toggling.
+private final class MenuSwitch: NSSwitch {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
     }
 }
 

@@ -5,9 +5,12 @@ final class SettingsWindowController: NSWindowController {
     private let apiKeyField = NSTextField(frame: .zero)
     private let launchAtLoginCheckbox = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
     private let versionLabel = NSTextField(labelWithString: "")
-    private let updatesButton = NSButton(title: "Check for Updates…", target: nil, action: nil)
+    private let autoUpdateCheckbox = NSButton(checkboxWithTitle: "Automatically check for updates", target: nil, action: nil)
+    private let checkNowButton = NSButton(title: "Check Now", target: nil, action: nil)
+    private let lastCheckLabel = NSTextField(labelWithString: "")
     private var saveAPIKey: ((String?) -> Void)?
-    private var checkForUpdates: (() -> Void)?
+    private var updater: Updater?
+    private var shownAPIKey = ""
 
     init() {
         let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 0))
@@ -32,13 +35,14 @@ final class SettingsWindowController: NSWindowController {
 
     func show(
         apiKey: String?,
-        canCheckForUpdates: Bool,
-        checkForUpdates: @escaping () -> Void,
+        updater: Updater,
         saveAPIKey: @escaping (String?) -> Void
     ) {
         self.saveAPIKey = saveAPIKey
-        self.checkForUpdates = checkForUpdates
-        updatesButton.isEnabled = canCheckForUpdates
+        self.updater = updater
+        autoUpdateCheckbox.state = updater.automaticallyChecksForUpdates ? .on : .off
+        checkNowButton.isEnabled = updater.canCheckForUpdates
+        refreshLastCheck()
         apiKeyField.stringValue = apiKey ?? ""
         apiKeyField.placeholderString = "Paste your API key"
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
@@ -73,26 +77,42 @@ final class SettingsWindowController: NSWindowController {
         versionLabel.textColor = .secondaryLabelColor
         versionLabel.font = .systemFont(ofSize: 11)
 
-        updatesButton.target = self
-        updatesButton.action = #selector(runUpdateCheck)
+        autoUpdateCheckbox.target = self
+        autoUpdateCheckbox.action = #selector(autoUpdateChanged)
+        checkNowButton.target = self
+        checkNowButton.action = #selector(runUpdateCheck)
+        lastCheckLabel.textColor = .secondaryLabelColor
+        lastCheckLabel.font = .systemFont(ofSize: 11)
 
-        let updatesRow = NSStackView(views: [updatesButton, versionLabel])
+        let separator = NSBox()
+        separator.boxType = .separator
+
+        let checkNowColumn = NSStackView(views: [checkNowButton, lastCheckLabel])
+        checkNowColumn.orientation = .vertical
+        checkNowColumn.alignment = .trailing
+        checkNowColumn.spacing = 4
+
+        let updatesRow = NSStackView()
         updatesRow.orientation = .horizontal
-        updatesRow.alignment = .centerY
-        updatesRow.spacing = 8
+        updatesRow.alignment = .top
+        updatesRow.addView(autoUpdateCheckbox, in: .leading)
+        updatesRow.addView(checkNowColumn, in: .trailing)
 
         let bottomRow = NSStackView()
         bottomRow.orientation = .horizontal
         bottomRow.alignment = .centerY
         bottomRow.spacing = 8
+        bottomRow.addView(versionLabel, in: .leading)
         bottomRow.addView(cancelButton, in: .trailing)
         bottomRow.addView(saveButton, in: .trailing)
 
-        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, updatesRow, bottomRow])
+        let stack = NSStackView(views: [apiKeyLabel, apiKeyField, launchAtLoginCheckbox, separator, updatesRow, bottomRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 12
         stack.setCustomSpacing(6, after: apiKeyLabel)
+        stack.setCustomSpacing(16, after: launchAtLoginCheckbox)
+        stack.setCustomSpacing(16, after: separator)
         stack.setCustomSpacing(20, after: updatesRow)
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
@@ -103,12 +123,31 @@ final class SettingsWindowController: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
             stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20),
             apiKeyField.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            separator.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            updatesRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             bottomRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
 
+    private func refreshLastCheck() {
+        guard let date = updater?.lastUpdateCheckDate else {
+            lastCheckLabel.stringValue = "Last check: Never"
+            return
+        }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        formatter.doesRelativeDateFormatting = true
+        lastCheckLabel.stringValue = "Last check: \(formatter.string(from: date))"
+    }
+
+    @objc private func autoUpdateChanged() {
+        updater?.automaticallyChecksForUpdates = autoUpdateCheckbox.state == .on
+    }
+
     @objc private func runUpdateCheck() {
-        checkForUpdates?()
+        updater?.checkForUpdates()
+        refreshLastCheck()
     }
 
     @objc private func launchAtLoginChanged() {
