@@ -51,3 +51,7 @@ show the app version, open the local dashboard, and quit.
 
 Not yet: code signing/notarization and a `launchd` schedule that can sync while
 the app is not running.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE).
