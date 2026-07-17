@@ -1,0 +1,151 @@
+name: Release
+
+# Pushing a semver tag (v1.2.0) produces a signed, notarized, Sparkle-signed
+# release: two identically-contented universal DMGs (the server matches assets
+# to machines by the arch token in the filename) plus the `<dmg>.sig` EdDSA
+# signatures the appcast requires. A DMG without its .sig never appears in the
+# feed. Publishing to users still happens in /admin/releases.
+#
+# Required repository secrets — the release cannot run without all of them:
+#   MACOS_CERTIFICATE_P12        base64 of the Developer ID Application .p12
+#   MACOS_CERTIFICATE_PASSWORD   the .p12's password
+#   KEYCHAIN_PASSWORD            any string; protects the throwaway keychain
+#   AC_API_KEY_P8                App Store Connect API key (.p8 contents)
+#   AC_API_KEY_ID                its key id
+#   AC_API_ISSUER_ID             its issuer id
+#   SPARKLE_PRIVATE_KEY          `generate_keys -x` output (base64 EdDSA key)
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+env:
+  SPARKLE_VERSION: 2.9.4
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      # The Xcode project builds the CLI from a sibling checkout
+      # (../tokitoki-cli), pinned to its latest release tag so the bundled
+      # binary is a released CLI, not whatever main happens to hold.
+      - uses: actions/checkout@v4
+        with:
+          path: tokitoki-macos
+      - uses: actions/checkout@v4
+        with:
+          repository: tokitoki-dev/tokitoki-cli
+          path: tokitoki-cli
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tokitoki-cli/go.mod
+
+      - name: Pin the CLI to its latest release tag
+        id: cli
+        run: |
+          cd tokitoki-cli
+          tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -1)"
+          if [ -z "$tag" ]; then
+            echo "tokitoki-cli has no release tag to bundle" >&2
+            exit 1
+          fi
+          git checkout --quiet "$tag"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Import signing certificate
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Archive
+        env:
+          TOKITOKI_CLI_VERSION: ${{ steps.cli.outputs.version }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # CURRENT_PROJECT_VERSION becomes CFBundleVersion, which Sparkle
+          # compares against the appcast's sparkle:version — both must be the
+          # release's semver or installed apps stop seeing updates.
+          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+            -scheme tokitoki-macos -configuration Release \
+            -archivePath build/tokitoki.xcarchive \
+            MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION="$version" \
+            TOKITOKI_CLI_VERSION="$TOKITOKI_CLI_VERSION" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            archive
+
+      - name: Export
+        run: |
+          xcodebuild -exportArchive -archivePath build/tokitoki.xcarchive \
+            -exportOptionsPlist tokitoki-macos/ExportOptions.plist \
+            -exportPath build/export
+
+      - name: Notarize and staple
+        env:
+          AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+        run: |
+          echo "$AC_API_KEY_P8" > "$RUNNER_TEMP/ac_api_key.p8"
+          ditto -c -k --keepParent build/export/tokitoki-macos.app build/notarize.zip
+          xcrun notarytool submit build/notarize.zip \
+            --key "$RUNNER_TEMP/ac_api_key.p8" \
+            --key-id "$AC_API_KEY_ID" \
+            --issuer "$AC_API_ISSUER_ID" \
+            --wait
+          xcrun stapler staple build/export/tokitoki-macos.app
+          rm "$RUNNER_TEMP/ac_api_key.p8" build/notarize.zip
+
+      - name: Package DMGs
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          # One universal app, two DMGs: the server matches release assets to
+          # machines by the arch token in the filename, so each arch needs an
+          # asset that names it even though the bytes could be shared.
+          for arch in arm64 amd64; do
+            hdiutil create -srcfolder build/export -volname TokiToki \
+              -format UDZO "dist/TokiToki-$version-$arch.dmg"
+          done
+
+      - name: Sparkle-sign the DMGs
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/sparkle.tar.xz" \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP" bin/sign_update
+          keyfile="$RUNNER_TEMP/sparkle_key"
+          (umask 077 && printf '%s' "$SPARKLE_PRIVATE_KEY" > "$keyfile")
+          for dmg in dist/*.dmg; do
+            "$RUNNER_TEMP/bin/sign_update" -f "$keyfile" -p "$dmg" > "$dmg.sig"
+            test -s "$dmg.sig"
+          done
+          rm "$keyfile"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

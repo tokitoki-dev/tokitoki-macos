@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      # The Xcode project builds the CLI from a sibling checkout
+      # (../tokitoki-cli), so both repos land side by side.
+      - uses: actions/checkout@v4
+        with:
+          path: tokitoki-macos
+      - uses: actions/checkout@v4
+        with:
+          repository: tokitoki-dev/tokitoki-cli
+          path: tokitoki-cli
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tokitoki-cli/go.mod
+
+      - name: Build (unsigned)
+        run: |
+          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+            -scheme tokitoki-macos -configuration Debug \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+
+      - name: Verify the bundled CLI is universal
+        run: |
+          lipo -archs "build/Build/Products/Debug/tokitoki-macos.app/Contents/Resources/tokitoki" | grep -q "x86_64 arm64"

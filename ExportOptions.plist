@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Developer ID export: the app is distributed outside the App Store
+	     and installed by Sparkle, so it must carry a Developer ID signature
+	     Gatekeeper accepts. -->
+	<key>method</key>
+	<string>developer-id</string>
+	<key>destination</key>
+	<string>export</string>
+	<key>teamID</key>
+	<string>998ZTJV2HQ</string>
+</dict>
+</plist>

@@ -44,50 +44,21 @@ rm sparkle_private_key.txt
 
 ## Cutting a release
 
-### 1. Bump the version
-
-`MARKETING_VERSION` in the Xcode project. It **must be semver** (`1.3.0`, not
-`1.3`) — the server compares versions and refuses to parse anything else, so a
-two-component version is a release nobody is ever offered.
-
-### 2. Build, sign, notarize
-
-The app must be Developer ID signed *and notarized*, or Gatekeeper blocks the
-update Sparkle installs and the user sees a broken app instead of a new one.
+GitHub Actions does the mechanical work. Cutting a release is two commands and
+one admin click:
 
 ```sh
-xcodebuild -project tokitoki-macos.xcodeproj -scheme tokitoki-macos \
-  -configuration Release -archivePath build/TokiToki.xcarchive archive
-
-xcodebuild -exportArchive -archivePath build/TokiToki.xcarchive \
-  -exportOptionsPlist ExportOptions.plist -exportPath build/export
-
-# Notarize, then staple the ticket to the app.
-xcrun notarytool submit build/export/TokiToki.app --wait \
-  --keychain-profile "AC_PASSWORD"
-xcrun stapler staple build/export/TokiToki.app
+git tag v1.3.0        # must be semver — the server refuses anything else
+git push origin v1.3.0
 ```
 
-### 3. Package and sign for Sparkle
-
-The filename must say which architecture it is for — the server matches assets
-to machines by name (`arm64` / `aarch64`, `amd64` / `x86_64` / `intel`), and an
-asset it cannot place is an asset nobody is offered.
-
-```sh
-hdiutil create -srcfolder build/export -volname TokiToki \
-  -format UDZO "TokiToki-1.3.0-arm64.dmg"
-
-# The signature. Prints one base64 line; that line is the whole security model.
-./bin/sign_update -p "TokiToki-1.3.0-arm64.dmg" > "TokiToki-1.3.0-arm64.dmg.sig"
-```
-
-`sign_update` reads the private key from the Keychain and will prompt for
-access. `-p` prints only the signature, which is what belongs in the `.sig`.
-
-### 4. Upload both files to the GitHub Release
-
-The `.sig` **must** sit next to its binary and be named `<binary>.sig` exactly:
+The `Release` workflow (`.github/workflows/release.yml`) then, on a macOS
+runner: checks out `tokitoki-cli` at its latest release tag as the sibling the
+Xcode project expects, builds the archive with `MARKETING_VERSION` **and**
+`CURRENT_PROJECT_VERSION` set to the tag (Sparkle compares the appcast's
+`sparkle:version` against the installed `CFBundleVersion`, so both must be the
+semver), Developer ID signs it, notarizes and staples, packages the two DMGs,
+Sparkle-signs them, and publishes the GitHub release:
 
 ```
 TokiToki-1.3.0-arm64.dmg
@@ -96,16 +67,32 @@ TokiToki-1.3.0-amd64.dmg
 TokiToki-1.3.0-amd64.dmg.sig
 ```
 
-The signature lives beside the binary rather than in our database because it is
-*derived from* the binary. A signature kept apart from the thing it signs is a
-signature that can go stale, and a stale signature is an update that silently
-stops installing.
+The filenames carry the arch because the server matches assets to machines by
+name (`arm64` / `aarch64`, `amd64` / `x86_64` / `intel`). The `.sig` sits next
+to its binary because it is *derived from* the binary — a signature kept apart
+from the thing it signs can go stale, and a stale signature is an update that
+silently stops installing. A `.dmg` without its `.sig` is not an error you will
+see: the release simply never appears in the appcast.
 
-A `.dmg` uploaded without its `.sig` is not an error you will see — the release
-simply never appears in the appcast. If a version you published is not reaching
-anyone, look for a missing `.sig` first.
+### One-time setup: repository secrets
 
-### 5. Publish it
+The workflow needs these secrets (Settings → Secrets and variables → Actions);
+without any one of them the release job fails:
+
+| Secret | Contents |
+| --- | --- |
+| `MACOS_CERTIFICATE_P12` | base64 of the Developer ID Application certificate (.p12) |
+| `MACOS_CERTIFICATE_PASSWORD` | the .p12's password |
+| `KEYCHAIN_PASSWORD` | any string; protects the runner's throwaway keychain |
+| `AC_API_KEY_P8` | App Store Connect API key file contents (for notarytool) |
+| `AC_API_KEY_ID` | that key's ID |
+| `AC_API_ISSUER_ID` | that key's issuer ID |
+| `SPARKLE_PRIVATE_KEY` | `generate_keys -x` output — the same EdDSA private key as in your Keychain |
+
+Export the certificate: Keychain Access → Developer ID Application → export as
+.p12, then `base64 -i cert.p12 | pbcopy`.
+
+### Publish it
 
 In `/admin/releases`: import the tag, then turn on **Published**. Set **Rollout**
 below 100 to stage it (note: Sparkle's feed only carries fully rolled-out
