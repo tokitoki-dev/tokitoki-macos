@@ -1,14 +1,14 @@
 //
-//  tracklm_macosTests.swift
-//  tracklm-macosTests
+//  tokitoki_macosTests.swift
+//  tokitoki-macosTests
 //
 //  Created by Eren on 2026/06/05.
 //
 
 import XCTest
-@testable import tracklm_macos
+@testable import tokitoki_macos
 
-final class tracklm_macosTests: XCTestCase {
+final class tokitoki_macosTests: XCTestCase {
 
     func testAgentProcessDoesNotUseEnvironmentOverride() throws {
         let script = try makeFakeAgent()

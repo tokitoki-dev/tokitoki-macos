@@ -17,7 +17,7 @@ enum AgentProcess {
     /// `~/.tokitoki/bin/tokitoki`. The `bin/` segment keeps executables apart
     /// from the data files (`api_key`, database, locks) in `~/.tokitoki`.
     /// Every front-end and editor plugin resolves this exact path — the
-    /// convention is documented in tracklm-goagent/README.md.
+    /// convention is documented in tokitoki-cli/README.md.
     static var sharedBinary: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".tokitoki")

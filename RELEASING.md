@@ -16,7 +16,7 @@ all. It is an updater that reports failure forever.
 | EdDSA **private** key | your login Keychain (account `ed25519`) | **yes — never commit, never paste** |
 | EdDSA **public** key | `TOKITOKI_SPARKLE_PUBLIC_KEY` in the Xcode build settings | no |
 | Which versions ship | the `/admin/releases` page | — |
-| The binaries | GitHub Releases of `akarineren/tracklm-macos` | no |
+| The binaries | GitHub Releases of `tokitoki-dev/tokitoki-macos` | no |
 
 The public key currently baked into the app is:
 
@@ -56,7 +56,7 @@ The app must be Developer ID signed *and notarized*, or Gatekeeper blocks the
 update Sparkle installs and the user sees a broken app instead of a new one.
 
 ```sh
-xcodebuild -project tracklm-macos.xcodeproj -scheme tracklm-macos \
+xcodebuild -project tokitoki-macos.xcodeproj -scheme tokitoki-macos \
   -configuration Release -archivePath build/TokiToki.xcarchive archive
 
 xcodebuild -exportArchive -archivePath build/TokiToki.xcarchive \

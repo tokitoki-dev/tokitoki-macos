@@ -1,13 +1,13 @@
 //
-//  tracklm_macosUITestsLaunchTests.swift
-//  tracklm-macosUITests
+//  tokitoki_macosUITestsLaunchTests.swift
+//  tokitoki-macosUITests
 //
 //  Created by Eren on 2026/06/05.
 //
 
 import XCTest
 
-final class tracklm_macosUITestsLaunchTests: XCTestCase {
+final class tokitoki_macosUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

@@ -29,10 +29,10 @@ its JSON results.
 
 ```sh
 # Build and run from Xcode, or use xcodebuild:
-cd tracklm-macos
-xcodebuild -project tracklm-macos.xcodeproj -scheme tracklm-macos \
-  -configuration Debug -derivedDataPath /tmp/tracklm-derived build
-open /tmp/tracklm-derived/Build/Products/Debug/tracklm-macos.app
+cd tokitoki-macos
+xcodebuild -project tokitoki-macos.xcodeproj -scheme tokitoki-macos \
+  -configuration Debug -derivedDataPath /tmp/tokitoki-derived build
+open /tmp/tokitoki-derived/Build/Products/Debug/tokitoki-macos.app
 ```
 
 The status bar uses a neutral text affordance rather than an app icon. Its menu

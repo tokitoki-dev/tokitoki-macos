@@ -1,6 +1,6 @@
 //
-//  tracklm_macosApp.swift
-//  tracklm-macos
+//  tokitoki_macosApp.swift
+//  tokitoki-macos
 //
 //  Menu bar app entry. SwiftUI owns @main but hands off to the AppKit
 //  AppDelegate, which manages the NSStatusItem and the Go sidecar agent.
@@ -9,7 +9,7 @@
 import SwiftUI
 
 @main
-struct tracklm_macosApp: App {
+struct tokitoki_macosApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
