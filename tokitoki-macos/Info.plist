@@ -24,11 +24,5 @@
 	<!-- No SUFeedURL: the app is one universal binary but an appcast describes
 	     one architecture, so the feed can only be known at runtime. Updater.swift
 	     supplies it. -->
-
-	<!-- Where this build's server lives. The dashboard link and the update feed
-	     are both derived from it, so a build cannot check one host for updates
-	     while sending its user to another. -->
-	<key>TokiTokiServerURL</key>
-	<string>$(TOKITOKI_SERVER_URL)</string>
 </dict>
 </plist>

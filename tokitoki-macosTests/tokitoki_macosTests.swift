@@ -10,6 +10,51 @@ import XCTest
 
 final class tokitoki_macosTests: XCTestCase {
 
+    @MainActor
+    func testServerURLDefaultsWhenEnvironmentMissing() {
+        XCTAssertEqual(
+            AppConfig.resolveServerURL(environment: [:]).absoluteString,
+            "https://tokitoki.dev"
+        )
+    }
+
+    @MainActor
+    func testServerURLUsesEnvironmentOverride() {
+        XCTAssertEqual(
+            AppConfig.resolveServerURL(
+                environment: [AppConfig.baseURLEnvironmentKey: " http://localhost:9093/ "]
+            ).absoluteString,
+            "http://localhost:9093/"
+        )
+    }
+
+    @MainActor
+    func testProcessEnvironmentInjectsServerURLAndPreservesExistingValues() {
+        let environment = AppConfig.processEnvironment(
+            inheriting: ["KEEP_ME": "yes"],
+            serverURL: URL(string: "https://staging.tokitoki.dev")!
+        )
+
+        XCTAssertEqual(environment["KEEP_ME"], "yes")
+        XCTAssertEqual(
+            environment[AppConfig.baseURLEnvironmentKey],
+            "https://staging.tokitoki.dev"
+        )
+    }
+
+    @MainActor
+    func testAgentClientPassesServerURLToChildProcess() async throws {
+        let script = try makeEnvironmentEchoAgent()
+        let client = try XCTUnwrap(AgentClient(
+            executableURL: script,
+            serverURL: URL(string: "https://staging.tokitoki.dev")!
+        ))
+
+        let value = try await client.getAPIKey()
+
+        XCTAssertEqual(value, "https://staging.tokitoki.dev")
+    }
+
     func testAgentProcessDoesNotUseEnvironmentOverride() throws {
         let script = try makeFakeAgent()
         setenv("TOKITOKI_AGENT_BIN", script.path, 1)
@@ -96,6 +141,19 @@ final class tokitoki_macosTests: XCTestCase {
         esac
         test -d \"$path\"
         printf '%s\\n' '{\"ok\":true}'
+        """
+        try source.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        addTeardownBlock { try? FileManager.default.removeItem(at: script) }
+        return script
+    }
+
+    private func makeEnvironmentEchoAgent() throws -> URL {
+        let script = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tokitoki-env-test-\(UUID().uuidString)")
+        let source = """
+        #!/bin/sh
+        printf '%s' "$TOKITOKI_BASE_URL"
         """
         try source.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)

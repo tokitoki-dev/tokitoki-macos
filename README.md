@@ -35,6 +35,15 @@ xcodebuild -project tokitoki-macos.xcodeproj -scheme tokitoki-macos \
 open /tmp/tokitoki-derived/Build/Products/Debug/tokitoki-macos.app
 ```
 
+All server access uses `TOKITOKI_BASE_URL`. Without it, the native app and the
+CLI it launches both use `https://tokitoki.dev`. To run the app executable
+against a local server:
+
+```sh
+TOKITOKI_BASE_URL=http://localhost:9093 \
+  /tmp/tokitoki-derived/Build/Products/Debug/tokitoki-macos.app/Contents/MacOS/tokitoki-macos
+```
+
 The status bar uses a neutral text affordance rather than an app icon. Its menu
 shows a short sync status, with **Open Dashboard**, **Settings**, and **Quit**.
 Settings provides API key and launch-at-login controls. Agents chooses the local

@@ -120,6 +120,10 @@ enum AgentProcess {
         process.arguments = arguments
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
+        process.environment = AppConfig.processEnvironment(
+            inheriting: ProcessInfo.processInfo.environment,
+            serverURL: AppConfig.serverURL
+        )
 
         let (exit, exitContinuation) = AsyncStream.makeStream(of: Int32.self)
         process.terminationHandler = { completed in

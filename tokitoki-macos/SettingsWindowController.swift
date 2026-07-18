@@ -105,10 +105,6 @@ final class SettingsWindowController: NSWindowController {
         renderVerificationState(.idle)
         launchAtLoginCheckbox.state = LaunchAtLogin.isEnabled ? .on : .off
 
-        let marketingVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
-        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
-        versionLabel.stringValue = "Version \(marketingVersion) (\(buildVersion))"
-
         NSApp.activate(ignoringOtherApps: true)
         window?.center()
         showWindow(nil)
@@ -161,6 +157,7 @@ final class SettingsWindowController: NSWindowController {
 
         versionLabel.textColor = .secondaryLabelColor
         versionLabel.font = .systemFont(ofSize: 11)
+        versionLabel.stringValue = "Version \(AppConfig.version)"
         versionLabel.identifier = NSUserInterfaceItemIdentifier("versionLabel")
 
         autoUpdateCheckbox.target = self

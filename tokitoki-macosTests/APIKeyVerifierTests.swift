@@ -132,6 +132,8 @@ final class APIKeyVerifierTests: XCTestCase {
                 .first { $0.identifier?.rawValue == "versionLabel" }
         )
         XCTAssertEqual(autoUpdateCheckbox.accessibilityLabel(), "Automatically check for updates")
+        XCTAssertEqual(versionLabel.stringValue, "Version \(AppConfig.version)")
+        XCTAssertFalse(versionLabel.stringValue.contains("("))
         let titleFrame = autoUpdateTitleLabel.convert(autoUpdateTitleLabel.bounds, to: contentView)
         let versionFrame = versionLabel.convert(versionLabel.bounds, to: contentView)
 

@@ -1,13 +1,18 @@
 import Foundation
 
 /// Runs the one-operation Go CLI. Calling the executable always scans selected
-/// local AI clients and uploads the resulting events to localhost:9093.
+/// local AI clients and uploads the resulting events to the configured server.
 struct AgentClient {
     let executableURL: URL
+    let serverURL: URL
 
-    init?(executableURL: URL? = AgentProcess.resolveBinary()) {
+    init?(
+        executableURL: URL? = AgentProcess.resolveBinary(),
+        serverURL: URL = AppConfig.serverURL
+    ) {
         guard let executableURL else { return nil }
         self.executableURL = executableURL
+        self.serverURL = serverURL
     }
 
     enum AgentError: LocalizedError {
@@ -97,6 +102,10 @@ struct AgentClient {
         process.standardOutput = output
         process.standardError = errors
         process.standardInput = inputPipe
+        process.environment = AppConfig.processEnvironment(
+            inheriting: ProcessInfo.processInfo.environment,
+            serverURL: serverURL
+        )
 
         let (exit, exitContinuation) = AsyncStream.makeStream(of: Int32.self)
         process.terminationHandler = { completed in
