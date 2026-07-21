@@ -67,18 +67,24 @@ and both `arm64` and `x86_64` slices, packages the two DMGs, Sparkle-signs them,
 and publishes the GitHub release:
 
 ```
-TokiToki-1.3.0-arm64.dmg
-TokiToki-1.3.0-arm64.dmg.sig
-TokiToki-1.3.0-amd64.dmg
-TokiToki-1.3.0-amd64.dmg.sig
+Tokitoki-1.3.0-arm64.dmg
+Tokitoki-1.3.0-arm64.dmg.sig
+Tokitoki-1.3.0-amd64.dmg
+Tokitoki-1.3.0-amd64.dmg.sig
+Tokitoki-1.3.0-dSYMs.zip
 ```
 
-The filenames carry the arch because the server matches assets to machines by
+The DMGs contain the app and an `/Applications` shortcut, are Developer ID
+signed, notarized, and stapled before Sparkle signs their final bytes. The
+filenames carry the arch because the server matches assets to machines by
 name (`arm64` / `aarch64`, `amd64` / `x86_64` / `intel`). The `.sig` sits next
 to its binary because it is *derived from* the binary — a signature kept apart
 from the thing it signs can go stale, and a stale signature is an update that
 silently stops installing. A `.dmg` without its `.sig` is not an error you will
 see: the release simply never appears in the appcast.
+
+The dSYM archive is retained for symbolicating crash reports; it is not an
+installer and the update server ignores it.
 
 ### One-time setup: production environment secrets
 
