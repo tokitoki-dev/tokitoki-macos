@@ -105,13 +105,13 @@ jobs:
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
         run: |
           echo "$AC_API_KEY_P8" > "$RUNNER_TEMP/ac_api_key.p8"
-          ditto -c -k --keepParent build/export/tokitoki-macos.app build/notarize.zip
+          ditto -c -k --keepParent build/export/Tokitoki.app build/notarize.zip
           xcrun notarytool submit build/notarize.zip \
             --key "$RUNNER_TEMP/ac_api_key.p8" \
             --key-id "$AC_API_KEY_ID" \
             --issuer "$AC_API_ISSUER_ID" \
             --wait
-          xcrun stapler staple build/export/tokitoki-macos.app
+          xcrun stapler staple build/export/Tokitoki.app
           rm "$RUNNER_TEMP/ac_api_key.p8" build/notarize.zip
 
       - name: Package DMGs

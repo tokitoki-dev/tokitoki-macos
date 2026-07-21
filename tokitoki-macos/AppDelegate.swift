@@ -56,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let image = NSImage(named: "TokiTokiLogo")?.copy() as? NSImage {
             image.isTemplate = true
-            image.size = NSSize(width: 15, height: 15)
+            image.size = NSSize(width: 22, height: 22)
             button.image = image
             button.imagePosition = .imageOnly
             button.title = ""
@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(dashboardMenuItem)
         menu.addItem(settingsMenuItem)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Quit Tokitoki", action: #selector(quit), keyEquivalent: ""))
 
         for item in menu.items where item.action != nil {
             item.target = self
@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeEnabledMenuItem() -> NSMenuItem {
-        let label = NSTextField(labelWithString: "TokiToki")
+        let label = NSTextField(labelWithString: "Tokitoki")
         label.font = .menuFont(ofSize: NSFont.systemFontSize(for: .regular))
         label.translatesAutoresizingMaskIntoConstraints = false
 

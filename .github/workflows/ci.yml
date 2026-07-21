@@ -30,4 +30,4 @@ jobs:
 
       - name: Verify the bundled CLI is universal
         run: |
-          lipo -archs "build/Build/Products/Debug/tokitoki-macos.app/Contents/Resources/tokitoki" | grep -q "x86_64 arm64"
+          lipo -archs "build/Build/Products/Debug/Tokitoki.app/Contents/Resources/tokitoki" | grep -q "x86_64 arm64"

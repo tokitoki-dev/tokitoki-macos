@@ -22,7 +22,7 @@ its JSON results.
   Code/Codex data folders and invokes the CLI after a short debounce whenever
   those files change.
 - **Packaging:** the Xcode target compiles the Go module and copies `tokitoki`
-  into `TokiToki.app/Contents/Resources`, so the app does not depend on an
+  into `Tokitoki.app/Contents/Resources`, so the app does not depend on an
   externally running daemon or an old binary in the repository.
 
 ## Run (dev)
@@ -32,7 +32,7 @@ its JSON results.
 cd tokitoki-macos
 xcodebuild -project tokitoki-macos.xcodeproj -scheme tokitoki-macos \
   -configuration Debug -derivedDataPath /tmp/tokitoki-derived build
-open /tmp/tokitoki-derived/Build/Products/Debug/tokitoki-macos.app
+open /tmp/tokitoki-derived/Build/Products/Debug/Tokitoki.app
 ```
 
 All server access uses `TOKITOKI_BASE_URL`. Without it, the native app and the
@@ -41,7 +41,7 @@ against a local server:
 
 ```sh
 TOKITOKI_BASE_URL=http://localhost:9093 \
-  /tmp/tokitoki-derived/Build/Products/Debug/tokitoki-macos.app/Contents/MacOS/tokitoki-macos
+  /tmp/tokitoki-derived/Build/Products/Debug/Tokitoki.app/Contents/MacOS/Tokitoki
 ```
 
 The status bar uses a neutral text affordance rather than an app icon. Its menu
@@ -50,7 +50,7 @@ Settings provides API key and launch-at-login controls. Agents chooses the local
 clients to read (**Claude Code** and/or **Codex**).
 
 The app always invokes the bundled CLI at
-`TokiToki.app/Contents/Resources/tokitoki`.
+`Tokitoki.app/Contents/Resources/tokitoki`.
 
 ## MVP scope
 

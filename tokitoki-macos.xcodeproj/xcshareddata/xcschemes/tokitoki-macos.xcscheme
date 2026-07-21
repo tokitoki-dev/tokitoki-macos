@@ -18,7 +18,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "B0B1AB8A2FD2C141000D4EB1"
-               BuildableName = "tokitoki-macos.app"
+               BuildableName = "Tokitoki.app"
                BlueprintName = "tokitoki-macos"
                ReferencedContainer = "container:tokitoki-macos.xcodeproj">
             </BuildableReference>
@@ -59,7 +59,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "B0B1AB8A2FD2C141000D4EB1"
-            BuildableName = "tokitoki-macos.app"
+            BuildableName = "Tokitoki.app"
             BlueprintName = "tokitoki-macos"
             ReferencedContainer = "container:tokitoki-macos.xcodeproj">
          </BuildableReference>
