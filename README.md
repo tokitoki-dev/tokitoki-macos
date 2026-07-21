@@ -1,4 +1,4 @@
-# TokiToki Menu Bar (macOS MVP)
+# Tokitoki Menu Bar for macOS
 
 A native macOS status-bar app that calls the stateless Go agent CLI and renders
 its JSON results.
@@ -21,9 +21,9 @@ its JSON results.
   an API key is configured. It also recursively watches the selected Claude
   Code/Codex data folders and invokes the CLI after a short debounce whenever
   those files change.
-- **Packaging:** the Xcode target compiles the Go module and copies `tokitoki`
-  into `Tokitoki.app/Contents/Resources`, so the app does not depend on an
-  externally running daemon or an old binary in the repository.
+- **Packaging:** the Xcode target compiles a universal Go CLI and copies it into
+  `Tokitoki.app/Contents/Resources`. At launch the app atomically seeds or
+  upgrades the shared `~/.tokitoki/bin/tokitoki` copy used by every client.
 
 ## Run (dev)
 
@@ -44,22 +44,16 @@ TOKITOKI_BASE_URL=http://localhost:9093 \
   /tmp/tokitoki-derived/Build/Products/Debug/Tokitoki.app/Contents/MacOS/Tokitoki
 ```
 
-The status bar uses a neutral text affordance rather than an app icon. Its menu
-shows a short sync status, with **Open Dashboard**, **Settings**, and **Quit**.
-Settings provides API key and launch-at-login controls. Agents chooses the local
-clients to read (**Claude Code** and/or **Codex**).
+The status bar uses the Tokitoki icon. Its menu provides **Dashboard**,
+**Settings**, tracking control, and **Quit Tokitoki**. Settings provides API
+key verification, launch-at-login, version, and Sparkle update controls.
 
-The app always invokes the bundled CLI at
-`Tokitoki.app/Contents/Resources/tokitoki`.
+The app prefers the shared CLI and uses the bundled copy as its trusted seed and
+fallback. It never requires a long-running local daemon.
 
-## MVP scope
-
-Implemented: invoke the bundled Go CLI, automatically upload selected local
-clients, configure the API key and enabled clients, register launch-at-login,
-show the app version, open the local dashboard, and quit.
-
-Not yet: code signing/notarization and a `launchd` schedule that can sync while
-the app is not running.
+Developer ID signing, Apple notarization, universal Intel/Apple Silicon DMGs,
+and Sparkle signing are automated by the tag release workflow. See
+[RELEASING.md](RELEASING.md) for the protected release process.
 
 ## License
 

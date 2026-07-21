@@ -25,6 +25,7 @@ permissions:
 
 env:
   SPARKLE_VERSION: 2.9.4
+  SPARKLE_SHA256: ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9
   TOKITOKI_CLI_TAG: v0.1.0
 
 concurrency:
@@ -185,13 +186,38 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
+          stage="$RUNNER_TEMP/dmg-root"
+          mkdir -p "$stage"
+          ditto build/export/Tokitoki.app "$stage/Tokitoki.app"
+          ln -s /Applications "$stage/Applications"
           # One universal app, two DMGs: the server matches release assets to
           # machines by the arch token in the filename, so each arch needs an
           # asset that names it even though the bytes could be shared.
           for arch in arm64 amd64; do
-            hdiutil create -srcfolder build/export -volname TokiToki \
-              -format UDZO "dist/TokiToki-$version-$arch.dmg"
+            dmg="dist/Tokitoki-$version-$arch.dmg"
+            hdiutil create -srcfolder "$stage" -volname Tokitoki \
+              -format UDZO "$dmg"
+            codesign --force --timestamp --sign "Developer ID Application" "$dmg"
           done
+
+      - name: Notarize and staple DMGs
+        env:
+          AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+        run: |
+          echo "$AC_API_KEY_P8" > "$RUNNER_TEMP/ac_api_key.p8"
+          for dmg in dist/*.dmg; do
+            xcrun notarytool submit "$dmg" \
+              --key "$RUNNER_TEMP/ac_api_key.p8" \
+              --key-id "$AC_API_KEY_ID" \
+              --issuer "$AC_API_ISSUER_ID" \
+              --wait
+            xcrun stapler staple "$dmg"
+            codesign --verify --verbose=2 "$dmg"
+            xcrun stapler validate "$dmg"
+          done
+          rm "$RUNNER_TEMP/ac_api_key.p8"
 
       - name: Sparkle-sign the DMGs
         env:
@@ -199,6 +225,7 @@ jobs:
         run: |
           curl -sSfL -o "$RUNNER_TEMP/sparkle.tar.xz" \
             "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
+          echo "$SPARKLE_SHA256  $RUNNER_TEMP/sparkle.tar.xz" | shasum -a 256 -c -
           tar -xf "$RUNNER_TEMP/sparkle.tar.xz" -C "$RUNNER_TEMP" bin/sign_update
           keyfile="$RUNNER_TEMP/sparkle_key"
           (umask 077 && printf '%s' "$SPARKLE_PRIVATE_KEY" > "$keyfile")
@@ -207,6 +234,12 @@ jobs:
             test -s "$dmg.sig"
           done
           rm "$keyfile"
+
+      - name: Archive debug symbols
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ditto -c -k --keepParent build/tokitoki.xcarchive/dSYMs \
+            "dist/Tokitoki-$version-dSYMs.zip"
 
       - name: Publish GitHub release
         env:
