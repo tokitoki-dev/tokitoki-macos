@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -22,11 +27,18 @@ jobs:
         with:
           go-version-file: tokitoki-cli/go.mod
 
-      - name: Build (unsigned)
+      - name: Build for testing (unsigned)
         run: |
           xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
             -scheme tokitoki-macos -configuration Debug \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build-for-testing
+
+      - name: Run unit tests
+        run: |
+          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+            -scheme tokitoki-macos -configuration Debug \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            test-without-building -only-testing:tokitoki-macosTests
 
       - name: Verify the bundled CLI is universal
         run: |
