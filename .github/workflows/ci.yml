@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -11,22 +16,30 @@ jobs:
     steps:
       # The Xcode project builds the CLI from a sibling checkout
       # (../tokitoki-cli), so both repos land side by side.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: tokitoki-macos
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tokitoki-dev/tokitoki-cli
           path: tokitoki-cli
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tokitoki-cli/go.mod
+          cache-dependency-path: tokitoki-cli/go.sum
 
-      - name: Build (unsigned)
+      - name: Build for testing (unsigned)
         run: |
           xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
             -scheme tokitoki-macos -configuration Debug \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build-for-testing
+
+      - name: Run unit tests
+        run: |
+          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+            -scheme tokitoki-macos -configuration Debug \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            test-without-building -only-testing:tokitoki-macosTests
 
       - name: Verify the bundled CLI is universal
         run: |

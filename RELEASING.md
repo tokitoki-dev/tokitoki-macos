@@ -48,17 +48,23 @@ GitHub Actions does the mechanical work. Cutting a release is two commands and
 one admin click:
 
 ```sh
+# Create release tags only from an up-to-date main branch.
+git switch main
+git pull --ff-only
 git tag v1.3.0        # must be semver — the server refuses anything else
 git push origin v1.3.0
 ```
 
-The `Release` workflow (`.github/workflows/release.yml`) then, on a macOS
-runner: checks out `tokitoki-cli` at its latest release tag as the sibling the
-Xcode project expects, builds the archive with `MARKETING_VERSION` **and**
+The `Release` workflow (`.github/workflows/release.yml`) first rejects any tag
+whose commit is not part of `main`, then runs the unit tests. On success, a
+macOS runner checks out `tokitoki-cli` at the explicitly pinned
+`TOKITOKI_CLI_TAG` as the sibling the Xcode project expects, builds the archive
+with `MARKETING_VERSION` **and**
 `CURRENT_PROJECT_VERSION` set to the tag (Sparkle compares the appcast's
 `sparkle:version` against the installed `CFBundleVersion`, so both must be the
-semver), Developer ID signs it, notarizes and staples, packages the two DMGs,
-Sparkle-signs them, and publishes the GitHub release:
+semver), Developer ID signs it, notarizes and staples it, verifies the signature
+and both `arm64` and `x86_64` slices, packages the two DMGs, Sparkle-signs them,
+and publishes the GitHub release:
 
 ```
 TokiToki-1.3.0-arm64.dmg
@@ -74,10 +80,12 @@ from the thing it signs can go stale, and a stale signature is an update that
 silently stops installing. A `.dmg` without its `.sig` is not an error you will
 see: the release simply never appears in the appcast.
 
-### One-time setup: repository secrets
+### One-time setup: production environment secrets
 
-The workflow needs these secrets (Settings → Secrets and variables → Actions);
-without any one of them the release job fails:
+The workflow needs these secrets in the protected `production` environment
+(Settings → Environments → production). Only `v*` tags may deploy to this
+environment, and a required reviewer must approve the signing job before it can
+access any secret. Without any one of them the release job fails:
 
 | Secret | Contents |
 | --- | --- |
@@ -126,6 +134,16 @@ the published/unpublished decision keeps applying to the bytes themselves, and
 the proxy copies bytes unaltered, so the EdDSA signature still verifies.
 
 ## CI
+
+Daily work is pushed to `dev`, which intentionally triggers no workflow. A pull
+request whose base is `main` runs the unsigned build and unit tests, and merging
+it runs the same checks once more on `main`. Direct pushes to `main` are blocked
+by the repository's branch protection settings.
+
+Before cutting an app release that updates the bundled CLI, update
+`TOKITOKI_CLI_TAG` in `.github/workflows/release.yml` through the same pull
+request flow. Pinning the CLI makes a rebuild of an existing app tag use the
+same source inputs instead of silently selecting a newer CLI release.
 
 To sign in CI, put the exported private key in a GitHub secret
 (`SPARKLE_PRIVATE_KEY`) and feed it to `sign_update` directly, which needs no

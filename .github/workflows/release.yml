@@ -6,7 +6,8 @@ name: Release
 # signatures the appcast requires. A DMG without its .sig never appears in the
 # feed. Publishing to users still happens in /admin/releases.
 #
-# Required repository secrets — the release cannot run without all of them:
+# Required `production` environment secrets — the release cannot run without
+# all of them, and the signing job cannot access them until deployment approval:
 #   MACOS_CERTIFICATE_P12        base64 of the Developer ID Application .p12
 #   MACOS_CERTIFICATE_PASSWORD   the .p12's password
 #   KEYCHAIN_PASSWORD            any string; protects the throwaway keychain
@@ -20,41 +21,91 @@ on:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   SPARKLE_VERSION: 2.9.4
+  TOKITOKI_CLI_TAG: v0.1.0
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  release:
+  verify:
     runs-on: macos-26
     steps:
-      # The Xcode project builds the CLI from a sibling checkout
-      # (../tokitoki-cli), pinned to its latest release tag so the bundled
-      # binary is a released CLI, not whatever main happens to hold.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: tokitoki-macos
-      - uses: actions/checkout@v4
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: tokitoki-dev/tokitoki-cli
+          ref: ${{ env.TOKITOKI_CLI_TAG }}
           path: tokitoki-cli
-          fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tokitoki-cli/go.mod
+          cache-dependency-path: tokitoki-cli/go.sum
 
-      - name: Pin the CLI to its latest release tag
-        id: cli
+      - name: Verify the release tag belongs to main
+        working-directory: tokitoki-macos
         run: |
-          cd tokitoki-cli
-          tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -1)"
-          if [ -z "$tag" ]; then
-            echo "tokitoki-cli has no release tag to bundle" >&2
+          git fetch origin main --no-tags
+          commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          if ! git merge-base --is-ancestor "$commit" origin/main; then
+            echo "Release tags must point to a commit on main" >&2
             exit 1
           fi
-          git checkout --quiet "$tag"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build for testing (unsigned)
+        run: |
+          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+            -scheme tokitoki-macos -configuration Debug \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build-for-testing
+
+      - name: Run unit tests
+        run: |
+          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+            -scheme tokitoki-macos -configuration Debug \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            test-without-building -only-testing:tokitoki-macosTests
+
+      - name: Verify the bundled CLI is universal
+        run: |
+          archs="$(lipo -archs build/Build/Products/Debug/Tokitoki.app/Contents/Resources/tokitoki)"
+          grep -qw arm64 <<< "$archs"
+          grep -qw x86_64 <<< "$archs"
+
+  release:
+    needs: verify
+    runs-on: macos-26
+    environment:
+      name: production
+    permissions:
+      contents: write
+    steps:
+      # The Xcode project builds the CLI from a sibling checkout
+      # (../tokitoki-cli), pinned to a reviewed release tag so rebuilding the
+      # same app tag always produces the same source inputs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: tokitoki-macos
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: tokitoki-dev/tokitoki-cli
+          ref: ${{ env.TOKITOKI_CLI_TAG }}
+          path: tokitoki-cli
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tokitoki-cli/go.mod
+          cache-dependency-path: tokitoki-cli/go.sum
+
+      - name: Record the bundled CLI version
+        id: cli
+        run: |
+          echo "version=${TOKITOKI_CLI_TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Import signing certificate
         env:
@@ -88,6 +139,7 @@ jobs:
             MARKETING_VERSION="$version" \
             CURRENT_PROJECT_VERSION="$version" \
             TOKITOKI_CLI_VERSION="$TOKITOKI_CLI_VERSION" \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             archive
@@ -113,6 +165,21 @@ jobs:
             --wait
           xcrun stapler staple build/export/Tokitoki.app
           rm "$RUNNER_TEMP/ac_api_key.p8" build/notarize.zip
+
+      - name: Verify signature, notarization, and architectures
+        run: |
+          app="build/export/Tokitoki.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+
+          while IFS= read -r -d '' binary; do
+            if file "$binary" | grep -q 'Mach-O'; then
+              archs="$(lipo -archs "$binary")"
+              grep -qw arm64 <<< "$archs"
+              grep -qw x86_64 <<< "$archs"
+            fi
+          done < <(find "$app/Contents" -type f -perm -111 -print0)
 
       - name: Package DMGs
         run: |
