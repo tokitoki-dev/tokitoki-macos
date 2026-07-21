@@ -6,7 +6,8 @@ name: Release
 # signatures the appcast requires. A DMG without its .sig never appears in the
 # feed. Publishing to users still happens in /admin/releases.
 #
-# Required repository secrets — the release cannot run without all of them:
+# Required `production` environment secrets — the release cannot run without
+# all of them, and the signing job cannot access them until deployment approval:
 #   MACOS_CERTIFICATE_P12        base64 of the Developer ID Application .p12
 #   MACOS_CERTIFICATE_PASSWORD   the .p12's password
 #   KEYCHAIN_PASSWORD            any string; protects the throwaway keychain
@@ -80,6 +81,8 @@ jobs:
   release:
     needs: verify
     runs-on: macos-26
+    environment:
+      name: production
     permissions:
       contents: write
     steps:

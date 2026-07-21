@@ -80,10 +80,12 @@ from the thing it signs can go stale, and a stale signature is an update that
 silently stops installing. A `.dmg` without its `.sig` is not an error you will
 see: the release simply never appears in the appcast.
 
-### One-time setup: repository secrets
+### One-time setup: production environment secrets
 
-The workflow needs these secrets (Settings → Secrets and variables → Actions);
-without any one of them the release job fails:
+The workflow needs these secrets in the protected `production` environment
+(Settings → Environments → production). Only `v*` tags may deploy to this
+environment, and a required reviewer must approve the signing job before it can
+access any secret. Without any one of them the release job fails:
 
 | Secret | Contents |
 | --- | --- |
