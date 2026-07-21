@@ -16,14 +16,14 @@ jobs:
     steps:
       # The Xcode project builds the CLI from a sibling checkout
       # (../tokitoki-cli), so both repos land side by side.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: tokitoki-macos
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: tokitoki-dev/tokitoki-cli
           path: tokitoki-cli
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: tokitoki-cli/go.mod
 
