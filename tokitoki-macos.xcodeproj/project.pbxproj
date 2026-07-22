@@ -265,6 +265,8 @@
 			);
 			inputPaths = (
 				"$(PROJECT_DIR)/scripts/bundle-cli.sh",
+				"$(PROJECT_DIR)/.build/cli/tokitoki-darwin-amd64",
+				"$(PROJECT_DIR)/.build/cli/tokitoki-darwin-arm64",
 			);
 			name = "Bundle TokiToki CLI";
 			outputFileListPaths = (

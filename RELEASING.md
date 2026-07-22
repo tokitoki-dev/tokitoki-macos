@@ -56,10 +56,10 @@ git push origin v1.3.0
 ```
 
 The `Release` workflow (`.github/workflows/release.yml`) first rejects any tag
-whose commit is not part of `main`, then runs the unit tests. On success, a
-macOS runner checks out `tokitoki-cli` at the explicitly pinned
-`TOKITOKI_CLI_TAG` as the sibling the Xcode project expects, builds the archive
-with `MARKETING_VERSION` **and**
+whose commit is not part of `main`, then runs the unit tests. CI and the release
+job download the two Darwin CLI assets pinned by tag and SHA-256 in
+`scripts/cli-release-pins.sh`, verify their checksums, exact architectures, and
+embedded version, then build the archive with `MARKETING_VERSION` **and**
 `CURRENT_PROJECT_VERSION` set to the tag (Sparkle compares the appcast's
 `sparkle:version` against the installed `CFBundleVersion`, so both must be the
 semver), Developer ID signs it, notarizes and staples it, verifies the signature
@@ -87,10 +87,11 @@ signature is an update that silently stops installing. A `.dmg` without its
 `.sig` is not an error you will see: the release simply never appears in the
 appcast.
 
-Release builds also compile the bundled Go CLI with `-trimpath`, disable VCS
-stamping, and strip its symbol/debug tables. CI enforces a 16 MB per-architecture
-CLI budget so an accidental return to a universal or unstripped binary fails
-before publishing.
+The CLI repository already publishes stripped, reproducible binaries. The
+macOS workflow consumes those exact bytes instead of rebuilding them, then
+Developer ID signs the selected CLI as part of the app. CI enforces a 16 MB
+per-architecture CLI budget so a wrong or unexpectedly large asset fails before
+publishing.
 
 The dSYM archive is retained for symbolicating crash reports; it is not an
 installer and the update server ignores it.
@@ -154,10 +155,15 @@ request whose base is `main` runs the unsigned build and unit tests, and merging
 it runs the same checks once more on `main`. Direct pushes to `main` are blocked
 by the repository's branch protection settings.
 
-Before cutting an app release that updates the bundled CLI, update
-`TOKITOKI_CLI_TAG` in `.github/workflows/release.yml` through the same pull
-request flow. Pinning the CLI makes a rebuild of an existing app tag use the
-same source inputs instead of silently selecting a newer CLI release.
+Before cutting an app release that updates the bundled CLI, update the tag and
+both Darwin SHA-256 values in `scripts/cli-release-pins.sh` through the same pull
+request flow. Never use GitHub's `latest` URL: pinning both version and bytes
+makes a rebuild of an existing app tag deterministic and turns a replaced or
+corrupted CLI asset into a hard build failure.
+
+Outside CI, Xcode builds from the sibling `../tokitoki-cli` source checkout by
+default. Set `TOKITOKI_CLI_DIR="$(PROJECT_DIR)/.build/cli"` only when
+intentionally supplying the two assets produced by `fetch-cli-release.sh`.
 
 To sign in CI, put the exported private key in a GitHub secret
 (`SPARKLE_PRIVATE_KEY`) and feed it to `sign_update` directly, which needs no

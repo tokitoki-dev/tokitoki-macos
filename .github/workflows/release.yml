@@ -25,7 +25,6 @@ permissions:
 env:
   SPARKLE_VERSION: 2.9.4
   SPARKLE_SHA256: ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9
-  TOKITOKI_CLI_TAG: v0.1.0
 
 concurrency:
   group: release-${{ github.ref }}
@@ -39,15 +38,6 @@ jobs:
         with:
           path: tokitoki-macos
           fetch-depth: 0
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: tokitoki-dev/tokitoki-cli
-          ref: ${{ env.TOKITOKI_CLI_TAG }}
-          path: tokitoki-cli
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: tokitoki-cli/go.mod
-          cache-dependency-path: tokitoki-cli/go.sum
 
       - name: Verify the release tag belongs to main
         working-directory: tokitoki-macos
@@ -59,17 +49,24 @@ jobs:
             exit 1
           fi
 
+      - name: Fetch pinned CLI release
+        working-directory: tokitoki-macos
+        run: scripts/fetch-cli-release.sh
+
       - name: Build for testing (unsigned)
         run: |
           xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
             -scheme tokitoki-macos -configuration Debug \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build-for-testing
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            TOKITOKI_CLI_DIR="$GITHUB_WORKSPACE/tokitoki-macos/.build/cli" \
+            build-for-testing
 
       - name: Run unit tests
         run: |
           xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
             -scheme tokitoki-macos -configuration Debug \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            TOKITOKI_CLI_DIR="$GITHUB_WORKSPACE/tokitoki-macos/.build/cli" \
             test-without-building -only-testing:tokitoki-macosTests
 
       - name: Verify the bundled CLI matches the app architecture
@@ -87,26 +84,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      # The Xcode project builds the CLI from a sibling checkout
-      # (../tokitoki-cli), pinned to a reviewed release tag so rebuilding the
-      # same app tag always produces the same source inputs.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: tokitoki-macos
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: tokitoki-dev/tokitoki-cli
-          ref: ${{ env.TOKITOKI_CLI_TAG }}
-          path: tokitoki-cli
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: tokitoki-cli/go.mod
-          cache-dependency-path: tokitoki-cli/go.sum
 
-      - name: Record the bundled CLI version
-        id: cli
-        run: |
-          echo "version=${TOKITOKI_CLI_TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Fetch pinned CLI release
+        working-directory: tokitoki-macos
+        run: scripts/fetch-cli-release.sh
 
       - name: Import signing certificate
         env:
@@ -127,8 +111,6 @@ jobs:
           rm "$RUNNER_TEMP/cert.p12"
 
       - name: Archive architecture-specific apps
-        env:
-          TOKITOKI_CLI_VERSION: ${{ steps.cli.outputs.version }}
         run: |
           version="${GITHUB_REF_NAME#v}"
           # CURRENT_PROJECT_VERSION becomes CFBundleVersion, which Sparkle
@@ -147,7 +129,7 @@ jobs:
               -archivePath "build/$arch/tokitoki.xcarchive" \
               MARKETING_VERSION="$version" \
               CURRENT_PROJECT_VERSION="$version" \
-              TOKITOKI_CLI_VERSION="$TOKITOKI_CLI_VERSION" \
+              TOKITOKI_CLI_DIR="$GITHUB_WORKSPACE/tokitoki-macos/.build/cli" \
               ARCHS="$xcode_arch" ONLY_ACTIVE_ARCH=NO \
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="Developer ID Application" \

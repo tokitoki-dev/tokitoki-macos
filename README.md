@@ -21,11 +21,13 @@ its JSON results.
   an API key is configured. It also recursively watches the selected Claude
   Code/Codex data folders and invokes the CLI after a short debounce whenever
   those files change.
-- **Packaging:** the Xcode target compiles the Go CLI for the same architecture
-  as the app and copies it into `Tokitoki.app/Contents/Resources`. Release
-  builds strip Go debug metadata and local paths. At launch the app atomically
-  seeds or upgrades the shared `~/.tokitoki/bin/tokitoki` copy used by every
-  client.
+- **Packaging:** CI and production builds download the reviewed CLI release
+  pinned in `scripts/cli-release-pins.sh`, verify its SHA-256, version, and
+  architecture, then copy the matching binary into
+  `Tokitoki.app/Contents/Resources`. Local builds fall back to compiling the
+  sibling `../tokitoki-cli` checkout so app and CLI changes can be developed
+  together. At launch the app atomically seeds or upgrades the shared
+  `~/.tokitoki/bin/tokitoki` copy used by every client.
 
 ## Run (dev)
 
