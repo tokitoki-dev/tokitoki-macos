@@ -1,10 +1,9 @@
 name: Release
 
 # Pushing a semver tag (v1.2.0) produces a signed, notarized, Sparkle-signed
-# release: two identically-contented universal DMGs (the server matches assets
-# to machines by the arch token in the filename) plus the `<dmg>.sig` EdDSA
-# signatures the appcast requires. A DMG without its .sig never appears in the
-# feed. Publishing to users still happens in /admin/releases.
+# release: native arm64 and amd64 DMGs plus the `<dmg>.sig` EdDSA signatures
+# the appcast requires. A DMG without its .sig never appears in the feed.
+# Publishing to users still happens in /admin/releases.
 #
 # Required `production` environment secrets — the release cannot run without
 # all of them, and the signing job cannot access them until deployment approval:
@@ -26,7 +25,6 @@ permissions:
 env:
   SPARKLE_VERSION: 2.9.4
   SPARKLE_SHA256: ce89daf967db1e1893ed3ebd67575ed82d3902563e3191ca92aaec9164fbdef9
-  TOKITOKI_CLI_TAG: v0.1.0
 
 concurrency:
   group: release-${{ github.ref }}
@@ -40,15 +38,6 @@ jobs:
         with:
           path: tokitoki-macos
           fetch-depth: 0
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: tokitoki-dev/tokitoki-cli
-          ref: ${{ env.TOKITOKI_CLI_TAG }}
-          path: tokitoki-cli
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: tokitoki-cli/go.mod
-          cache-dependency-path: tokitoki-cli/go.sum
 
       - name: Verify the release tag belongs to main
         working-directory: tokitoki-macos
@@ -60,24 +49,32 @@ jobs:
             exit 1
           fi
 
+      - name: Fetch pinned CLI release
+        working-directory: tokitoki-macos
+        run: scripts/fetch-cli-release.sh
+
       - name: Build for testing (unsigned)
         run: |
           xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
             -scheme tokitoki-macos -configuration Debug \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build-for-testing
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            TOKITOKI_CLI_DIR="$GITHUB_WORKSPACE/tokitoki-macos/.build/cli" \
+            build-for-testing
 
       - name: Run unit tests
         run: |
           xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
             -scheme tokitoki-macos -configuration Debug \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            TOKITOKI_CLI_DIR="$GITHUB_WORKSPACE/tokitoki-macos/.build/cli" \
             test-without-building -only-testing:tokitoki-macosTests
 
-      - name: Verify the bundled CLI is universal
+      - name: Verify the bundled CLI matches the app architecture
         run: |
-          archs="$(lipo -archs build/Build/Products/Debug/Tokitoki.app/Contents/Resources/tokitoki)"
-          grep -qw arm64 <<< "$archs"
-          grep -qw x86_64 <<< "$archs"
+          app="build/Build/Products/Debug/Tokitoki.app"
+          app_archs="$(lipo -archs "$app/Contents/MacOS/Tokitoki")"
+          cli_archs="$(lipo -archs "$app/Contents/Resources/tokitoki")"
+          test "$cli_archs" = "$app_archs"
 
   release:
     needs: verify
@@ -87,26 +84,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      # The Xcode project builds the CLI from a sibling checkout
-      # (../tokitoki-cli), pinned to a reviewed release tag so rebuilding the
-      # same app tag always produces the same source inputs.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: tokitoki-macos
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: tokitoki-dev/tokitoki-cli
-          ref: ${{ env.TOKITOKI_CLI_TAG }}
-          path: tokitoki-cli
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: tokitoki-cli/go.mod
-          cache-dependency-path: tokitoki-cli/go.sum
 
-      - name: Record the bundled CLI version
-        id: cli
-        run: |
-          echo "version=${TOKITOKI_CLI_TAG#v}" >> "$GITHUB_OUTPUT"
+      - name: Fetch pinned CLI release
+        working-directory: tokitoki-macos
+        run: scripts/fetch-cli-release.sh
 
       - name: Import signing certificate
         env:
@@ -126,78 +110,122 @@ jobs:
           security list-keychains -d user -s "$keychain" login.keychain
           rm "$RUNNER_TEMP/cert.p12"
 
-      - name: Archive
-        env:
-          TOKITOKI_CLI_VERSION: ${{ steps.cli.outputs.version }}
+      - name: Archive architecture-specific apps
         run: |
           version="${GITHUB_REF_NAME#v}"
           # CURRENT_PROJECT_VERSION becomes CFBundleVersion, which Sparkle
           # compares against the appcast's sparkle:version — both must be the
           # release's semver or installed apps stop seeing updates.
-          xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
-            -scheme tokitoki-macos -configuration Release \
-            -archivePath build/tokitoki.xcarchive \
-            MARKETING_VERSION="$version" \
-            CURRENT_PROJECT_VERSION="$version" \
-            TOKITOKI_CLI_VERSION="$TOKITOKI_CLI_VERSION" \
-            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Developer ID Application" \
-            archive
+          for arch in arm64 amd64; do
+            if [ "$arch" = arm64 ]; then
+              xcode_arch=arm64
+            else
+              xcode_arch=x86_64
+            fi
 
-      - name: Export
+            xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+              -scheme tokitoki-macos -configuration Release \
+              -derivedDataPath "build/$arch/DerivedData" \
+              -archivePath "build/$arch/tokitoki.xcarchive" \
+              MARKETING_VERSION="$version" \
+              CURRENT_PROJECT_VERSION="$version" \
+              TOKITOKI_CLI_DIR="$GITHUB_WORKSPACE/tokitoki-macos/.build/cli" \
+              ARCHS="$xcode_arch" ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY="Developer ID Application" \
+              archive
+          done
+
+      - name: Export architecture-specific apps
         run: |
-          xcodebuild -exportArchive -archivePath build/tokitoki.xcarchive \
-            -exportOptionsPlist tokitoki-macos/ExportOptions.plist \
-            -exportPath build/export
+          for arch in arm64 amd64; do
+            xcodebuild -exportArchive \
+              -archivePath "build/$arch/tokitoki.xcarchive" \
+              -exportOptionsPlist tokitoki-macos/ExportOptions.plist \
+              -exportPath "build/$arch/export"
+          done
 
-      - name: Notarize and staple
+      - name: Notarize and staple apps
         env:
           AC_API_KEY_P8: ${{ secrets.AC_API_KEY_P8 }}
           AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
           AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
         run: |
           echo "$AC_API_KEY_P8" > "$RUNNER_TEMP/ac_api_key.p8"
-          ditto -c -k --keepParent build/export/Tokitoki.app build/notarize.zip
-          xcrun notarytool submit build/notarize.zip \
-            --key "$RUNNER_TEMP/ac_api_key.p8" \
-            --key-id "$AC_API_KEY_ID" \
-            --issuer "$AC_API_ISSUER_ID" \
-            --wait
-          xcrun stapler staple build/export/Tokitoki.app
-          rm "$RUNNER_TEMP/ac_api_key.p8" build/notarize.zip
+          for arch in arm64 amd64; do
+            app="build/$arch/export/Tokitoki.app"
+            archive="build/$arch/notarize.zip"
+            ditto -c -k --keepParent "$app" "$archive"
+            xcrun notarytool submit "$archive" \
+              --key "$RUNNER_TEMP/ac_api_key.p8" \
+              --key-id "$AC_API_KEY_ID" \
+              --issuer "$AC_API_ISSUER_ID" \
+              --wait
+            xcrun stapler staple "$app"
+            rm "$archive"
+          done
+          rm "$RUNNER_TEMP/ac_api_key.p8"
 
       - name: Verify signature, notarization, and architectures
         run: |
-          app="build/export/Tokitoki.app"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          xcrun stapler validate "$app"
-          spctl --assess --type execute --verbose=2 "$app"
-
-          while IFS= read -r -d '' binary; do
-            if file "$binary" | grep -q 'Mach-O'; then
-              archs="$(lipo -archs "$binary")"
-              grep -qw arm64 <<< "$archs"
-              grep -qw x86_64 <<< "$archs"
+          for arch in arm64 amd64; do
+            if [ "$arch" = arm64 ]; then
+              expected=arm64
+            else
+              expected=x86_64
             fi
-          done < <(find "$app/Contents" -type f -perm -111 -print0)
+
+            app="build/$arch/export/Tokitoki.app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=2 "$app"
+
+            for binary in \
+              "$app/Contents/MacOS/Tokitoki" \
+              "$app/Contents/Resources/tokitoki"; do
+              actual="$(lipo -archs "$binary")"
+              if [ "$actual" != "$expected" ]; then
+                echo "Expected $expected only, found '$actual' in $binary" >&2
+                exit 1
+              fi
+            done
+
+            # Sparkle is supplied as a vendor-signed universal XCFramework.
+            # Preserve that supported artifact, but prove every executable in
+            # the app can run on the architecture named by this package.
+            while IFS= read -r -d '' binary; do
+              if file "$binary" | grep -q 'Mach-O'; then
+                actual="$(lipo -archs "$binary")"
+                if ! grep -qw "$expected" <<< "$actual"; then
+                  echo "Missing $expected slice in $binary (found '$actual')" >&2
+                  exit 1
+                fi
+              fi
+            done < <(find "$app/Contents" -type f -perm -111 -print0)
+
+            cli="$app/Contents/Resources/tokitoki"
+            cli_size="$(stat -f %z "$cli")"
+            if [ "$cli_size" -ge 16000000 ]; then
+              echo "Bundled CLI size regression: $cli_size bytes" >&2
+              exit 1
+            fi
+            echo "$arch app: $(du -sh "$app" | cut -f1); CLI: $cli_size bytes"
+          done
 
       - name: Package DMGs
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir -p dist
-          stage="$RUNNER_TEMP/dmg-root"
-          mkdir -p "$stage"
-          ditto build/export/Tokitoki.app "$stage/Tokitoki.app"
-          ln -s /Applications "$stage/Applications"
-          # One universal app, two DMGs: the server matches release assets to
-          # machines by the arch token in the filename, so each arch needs an
-          # asset that names it even though the bytes could be shared.
           for arch in arm64 amd64; do
+            stage="$RUNNER_TEMP/dmg-root-$arch"
+            mkdir -p "$stage"
+            ditto "build/$arch/export/Tokitoki.app" "$stage/Tokitoki.app"
+            ln -s /Applications "$stage/Applications"
             dmg="dist/Tokitoki-$version-$arch.dmg"
             hdiutil create -srcfolder "$stage" -volname Tokitoki \
               -format UDZO "$dmg"
             codesign --force --timestamp --sign "Developer ID Application" "$dmg"
+            du -h "$dmg"
           done
 
       - name: Notarize and staple DMGs
@@ -238,8 +266,10 @@ jobs:
       - name: Archive debug symbols
         run: |
           version="${GITHUB_REF_NAME#v}"
-          ditto -c -k --keepParent build/tokitoki.xcarchive/dSYMs \
-            "dist/Tokitoki-$version-dSYMs.zip"
+          for arch in arm64 amd64; do
+            ditto -c -k --keepParent "build/$arch/tokitoki.xcarchive/dSYMs" \
+              "dist/Tokitoki-$version-$arch-dSYMs.zip"
+          done
 
       - name: Publish GitHub release
         env:

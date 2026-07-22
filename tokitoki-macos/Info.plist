@@ -21,8 +21,8 @@
 	<key>SUPublicEDKey</key>
 	<string>$(TOKITOKI_SPARKLE_PUBLIC_KEY)</string>
 
-	<!-- No SUFeedURL: the app is one universal binary but an appcast describes
-	     one architecture, so the feed can only be known at runtime. Updater.swift
-	     supplies it. -->
+	<!-- No SUFeedURL: each appcast describes one architecture, so the feed is
+	     selected at runtime from the executing process. Updater.swift supplies
+	     it. -->
 </dict>
 </plist>
