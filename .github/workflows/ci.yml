@@ -41,6 +41,46 @@ jobs:
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
             test-without-building -only-testing:tokitoki-macosTests
 
-      - name: Verify the bundled CLI is universal
+      - name: Verify the bundled CLI matches the app architecture
         run: |
-          lipo -archs "build/Build/Products/Debug/Tokitoki.app/Contents/Resources/tokitoki" | grep -q "x86_64 arm64"
+          app="build/Build/Products/Debug/Tokitoki.app"
+          app_archs="$(lipo -archs "$app/Contents/MacOS/Tokitoki")"
+          cli_archs="$(lipo -archs "$app/Contents/Resources/tokitoki")"
+          test "$cli_archs" = "$app_archs"
+
+      - name: Build and verify release architectures (unsigned)
+        run: |
+          for arch in arm64 x86_64; do
+            xcodebuild -project tokitoki-macos/tokitoki-macos.xcodeproj \
+              -scheme tokitoki-macos -configuration Release \
+              -derivedDataPath "build-release-$arch" \
+              ARCHS="$arch" ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGNING_ALLOWED=NO build
+
+            app="build-release-$arch/Build/Products/Release/Tokitoki.app"
+            for binary in \
+              "$app/Contents/MacOS/Tokitoki" \
+              "$app/Contents/Resources/tokitoki"; do
+              actual="$(lipo -archs "$binary")"
+              if [ "$actual" != "$arch" ]; then
+                echo "Expected $arch only, found '$actual' in $binary" >&2
+                exit 1
+              fi
+            done
+
+            while IFS= read -r -d '' binary; do
+              if file "$binary" | grep -q 'Mach-O'; then
+                actual="$(lipo -archs "$binary")"
+                if ! grep -qw "$arch" <<< "$actual"; then
+                  echo "Missing $arch slice in $binary (found '$actual')" >&2
+                  exit 1
+                fi
+              fi
+            done < <(find "$app/Contents" -type f -perm -111 -print0)
+
+            cli_size="$(stat -f %z "$app/Contents/Resources/tokitoki")"
+            if [ "$cli_size" -ge 16000000 ]; then
+              echo "Bundled CLI size regression: $cli_size bytes" >&2
+              exit 1
+            fi
+          done

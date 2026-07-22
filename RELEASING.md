@@ -63,25 +63,34 @@ with `MARKETING_VERSION` **and**
 `CURRENT_PROJECT_VERSION` set to the tag (Sparkle compares the appcast's
 `sparkle:version` against the installed `CFBundleVersion`, so both must be the
 semver), Developer ID signs it, notarizes and staples it, verifies the signature
-and both `arm64` and `x86_64` slices, packages the two DMGs, Sparkle-signs them,
-and publishes the GitHub release:
+and exact architecture of the first-party app and CLI executables, packages the
+two native DMGs, Sparkle-signs them, and publishes the GitHub release:
 
 ```
 Tokitoki-1.3.0-arm64.dmg
 Tokitoki-1.3.0-arm64.dmg.sig
 Tokitoki-1.3.0-amd64.dmg
 Tokitoki-1.3.0-amd64.dmg.sig
-Tokitoki-1.3.0-dSYMs.zip
+Tokitoki-1.3.0-arm64-dSYMs.zip
+Tokitoki-1.3.0-amd64-dSYMs.zip
 ```
 
-The DMGs contain the app and an `/Applications` shortcut, are Developer ID
-signed, notarized, and stapled before Sparkle signs their final bytes. The
-filenames carry the arch because the server matches assets to machines by
-name (`arm64` / `aarch64`, `amd64` / `x86_64` / `intel`). The `.sig` sits next
-to its binary because it is *derived from* the binary — a signature kept apart
-from the thing it signs can go stale, and a stale signature is an update that
-silently stops installing. A `.dmg` without its `.sig` is not an error you will
-see: the release simply never appears in the appcast.
+Each DMG contains an app and bundled CLI built only for its named architecture,
+plus an `/Applications` shortcut. Sparkle's small, vendor-supplied runtime stays
+universal rather than modifying its supported nested signing structure. The
+DMG is Developer ID signed, notarized, and stapled before Sparkle signs its
+final bytes. The filenames carry the arch because the server matches assets to
+machines by name (`arm64` / `aarch64`, `amd64` / `x86_64` / `intel`). The
+`.sig` sits next to its binary because it is *derived from* the binary — a
+signature kept apart from the thing it signs can go stale, and a stale
+signature is an update that silently stops installing. A `.dmg` without its
+`.sig` is not an error you will see: the release simply never appears in the
+appcast.
+
+Release builds also compile the bundled Go CLI with `-trimpath`, disable VCS
+stamping, and strip its symbol/debug tables. CI enforces a 16 MB per-architecture
+CLI budget so an accidental return to a universal or unstripped binary fails
+before publishing.
 
 The dSYM archive is retained for symbolicating crash reports; it is not an
 installer and the update server ignores it.
@@ -119,18 +128,17 @@ publishing is the decision.
 
 ## How the client finds it
 
-The app has **no `SUFeedURL`** in its Info.plist. It ships as one universal
-binary but an appcast describes one architecture, so the feed URL cannot be a
-build-time constant — `Updater.swift` builds it at runtime from the architecture
-the process is actually executing as:
+The app has **no `SUFeedURL`** in its Info.plist. Each appcast describes one
+architecture, so `Updater.swift` builds the feed URL at runtime from the
+architecture the process is actually executing as:
 
 ```
 <server>/api/updates/appcast/macos/{arm64|amd64}
 ```
 
-Using the *process* architecture, not the machine's, is what makes this correct
-under Rosetta: a translated x86_64 app on Apple Silicon must be offered the
-Intel build, because that is what it is.
+Using the *process* architecture, not the machine's, keeps upgrades from older
+universal builds and Intel copies running under Rosetta correct: a translated
+x86_64 app on Apple Silicon must be offered the Intel build.
 
 Downloads go through `<server>/api/updates/download/...`, which streams the
 bytes from GitHub through our server rather than redirecting to it — GitHub's

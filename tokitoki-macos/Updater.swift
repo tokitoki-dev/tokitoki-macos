@@ -8,13 +8,11 @@ import Sparkle
 /// this type supplies is the one thing Sparkle cannot know: *which* feed to
 /// read.
 ///
-/// The app ships as a single universal binary, but an appcast describes updates
-/// for one architecture — so the feed URL cannot be a build-time constant. We
-/// resolve it at runtime from the architecture we are actually executing as,
-/// which is also the only way to get this right on a Rosetta-translated
-/// process: an Intel-translated app on Apple Silicon must be offered the Intel
-/// build, because that is what it *is*, not the arm64 one the hardware could
-/// run.
+/// Each release has a native build per architecture, and each appcast describes
+/// one of them. We resolve the feed at runtime from the architecture we are
+/// actually executing as. This also keeps upgrades from older universal builds
+/// correct under Rosetta: an Intel-translated app must receive the Intel build,
+/// not the arm64 build the hardware could otherwise run.
 @MainActor
 final class Updater {
     private let controller: SPUStandardUpdaterController
@@ -63,9 +61,7 @@ private final class FeedDelegate: NSObject, SPUUpdaterDelegate {
 ///
 /// `uname` reports the hardware, which is the wrong question: under Rosetta the
 /// hardware is arm64 while the process, and therefore the app that must be
-/// replaced, is x86_64. The compile-time check answers what we actually run as,
-/// and in a universal binary both slices are compiled, so each slice gets the
-/// answer that is true for itself.
+/// replaced, is x86_64. The compile-time check answers what we actually run as.
 private enum Arch {
     static var current: String {
         #if arch(arm64)
