@@ -7,7 +7,7 @@ import Foundation
 /// copy that updates. The binary bundled with this app is the fallback and
 /// the seed: the app never downloads a CLI, it only copies its bundled build
 /// into the shared location when the shared one is missing or older, then
-/// lets `tokitoki upgrade` (the CLI updating itself, in Go) take it from
+/// lets `tokitoki update` (the CLI updating itself, in Go) take it from
 /// there.
 ///
 /// The macOS client must not start a long-lived local server. Each operation
@@ -71,13 +71,13 @@ enum AgentProcess {
     /// Asks the shared CLI to update itself against the server. Silent; the
     /// CLI owns the whole check-download-verify-swap sequence, so failure
     /// here costs nothing but a log line. Run at launch and daily.
-    static func upgradeSharedCLI() async {
+    static func updateSharedCLI() async {
         let shared = sharedBinary
         guard FileManager.default.isExecutableFile(atPath: shared.path) else { return }
         do {
-            _ = try await run(shared, arguments: ["upgrade"])
+            _ = try await run(shared, arguments: ["update"])
         } catch {
-            NSLog("TokiToki: shared CLI upgrade failed: %@", error.localizedDescription)
+            NSLog("TokiToki: shared CLI update failed: %@", error.localizedDescription)
         }
     }
 

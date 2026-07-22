@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startMonitoringIfEnabled()
             scheduleAutomaticSync()
             // Silent, and fully owned by the CLI itself — the app only asks.
-            await AgentProcess.upgradeSharedCLI()
+            await AgentProcess.updateSharedCLI()
         }
         refreshTimer = Timer.scheduledTimer(
             timeInterval: 30 * 60,
@@ -154,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func triggerCLIUpgrade() {
-        Task { await AgentProcess.upgradeSharedCLI() }
+        Task { await AgentProcess.updateSharedCLI() }
     }
 
     private func syncAutomatically() async {
