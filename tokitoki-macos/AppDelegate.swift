@@ -85,7 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.target = self
             item.image = nil
         }
-        menu.delegate = self
         statusItem.menu = menu
     }
 
@@ -239,15 +238,6 @@ extension AppDelegate: NSMenuItemValidation {
         default:
             return true
         }
-    }
-}
-
-extension AppDelegate: NSMenuDelegate {
-    // NSSwitch draws gray while the app is inactive, and a menu bar app is
-    // inactive whenever its menu opens. Activating here makes the switch pick
-    // up the system accent color — the same trick Tailscale uses.
-    func menuWillOpen(_ menu: NSMenu) {
-        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
