@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // NSMenu sizes a custom item by the view's frame, so the container
         // needs a real one; width tracks the menu via autoresizing.
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 28))
+        let container = MenuItemContainerView(frame: NSRect(x: 0, y: 0, width: 175, height: 28))
         container.autoresizingMask = [.width]
         container.addSubview(label)
         container.addSubview(enabledSwitch)
@@ -238,6 +238,19 @@ extension AppDelegate: NSMenuItemValidation {
         default:
             return true
         }
+    }
+}
+
+/// Controls draw their active look from the key state of the window they sit
+/// in, and a menu's window never becomes key on its own — so the switch would
+/// render gray. Marking the menu window as key the moment the view lands in it
+/// keeps the switch in the accent color without touching app activation
+/// (activating the app here would cancel menu tracking on macOS 14+, closing
+/// the menu on first click). This is what Tailscale's menu does.
+private final class MenuItemContainerView: NSView {
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        newWindow?.becomeKey()
     }
 }
 
