@@ -120,7 +120,7 @@
 				B0B1AB872FD2C141000D4EB1 /* Sources */,
 				B0B1AB882FD2C141000D4EB1 /* Frameworks */,
 				B0B1AB892FD2C141000D4EB1 /* Resources */,
-				B0B1ABC02FD2C142000D4EB1 /* Bundle TokiToki CLI */,
+				B0B1ABC02FD2C142000D4EB1 /* Bundle Tokitoki CLI */,
 			);
 			buildRules = (
 			);
@@ -255,7 +255,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		B0B1ABC02FD2C142000D4EB1 /* Bundle TokiToki CLI */ = {
+		B0B1ABC02FD2C142000D4EB1 /* Bundle Tokitoki CLI */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -268,7 +268,7 @@
 				"$(PROJECT_DIR)/.build/cli/tokitoki-darwin-amd64",
 				"$(PROJECT_DIR)/.build/cli/tokitoki-darwin-arm64",
 			);
-			name = "Bundle TokiToki CLI";
+			name = "Bundle Tokitoki CLI";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -441,7 +441,7 @@
 		B0B1ABAD2FD2C142000D4EB1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = TokiTokiAppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = TokitokiAppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -479,7 +479,7 @@
 		B0B1ABAE2FD2C142000D4EB1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = TokiTokiAppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = TokitokiAppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;

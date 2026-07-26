@@ -1,4 +1,4 @@
-# Releasing TokiToki for macOS
+# Releasing Tokitoki for macOS
 
 The app updates itself with [Sparkle](https://sparkle-project.org). Sparkle will
 only install a build whose **EdDSA signature** verifies against the public key

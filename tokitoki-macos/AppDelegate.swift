@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureStatusItemIcon() {
         guard let button = statusItem.button else { return }
 
-        if let image = NSImage(named: "TokiTokiLogo")?.copy() as? NSImage {
+        if let image = NSImage(named: "TokitokiLogo")?.copy() as? NSImage {
             image.isTemplate = true
             image.size = NSSize(width: 22, height: 22)
             button.image = image
@@ -165,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch let error as AgentClient.AgentError where error.isMissingAPIKey {
             return
         } catch {
-            NSLog("TokiToki: %@", Self.menuMessage(for: error))
+            NSLog("Tokitoki: %@", Self.menuMessage(for: error))
         }
     }
 
@@ -179,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 apiKey = nil
             } catch {
                 apiKey = nil
-                NSLog("TokiToki: %@", Self.menuMessage(for: error))
+                NSLog("Tokitoki: %@", Self.menuMessage(for: error))
             }
             guard let self else { return }
             settingsWindowController.show(
@@ -199,7 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try await client.setAPIKey(apiKey)
                 scheduleAutomaticSync()
             } catch {
-                NSLog("TokiToki: %@", Self.menuMessage(for: error))
+                NSLog("Tokitoki: %@", Self.menuMessage(for: error))
             }
         }
     }

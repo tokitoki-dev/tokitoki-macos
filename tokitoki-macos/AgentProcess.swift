@@ -3,7 +3,7 @@ import Foundation
 /// Resolves the stateless `tokitoki` CLI and keeps the shared copy fresh.
 ///
 /// Two layers. The shared binary at `~/.tokitoki/bin/tokitoki` wins — it is the
-/// one copy every TokiToki front-end and editor plugin invokes, and the one
+/// one copy every Tokitoki front-end and editor plugin invokes, and the one
 /// copy that updates. The binary bundled with this app is the fallback and
 /// the seed: the app never downloads a CLI, it only copies its bundled build
 /// into the shared location when the shared one is missing or older, then
@@ -13,7 +13,7 @@ import Foundation
 /// The macOS client must not start a long-lived local server. Each operation
 /// invokes the CLI once and parses the JSON it writes to standard output.
 enum AgentProcess {
-    /// The CLI shared by every TokiToki client on this machine:
+    /// The CLI shared by every Tokitoki client on this machine:
     /// `~/.tokitoki/bin/tokitoki`. The `bin/` segment keeps executables apart
     /// from the data files (`api_key`, database, locks) in `~/.tokitoki`.
     /// Every front-end and editor plugin resolves this exact path — the
@@ -64,7 +64,7 @@ enum AgentProcess {
         do {
             try seed(from: bundled, to: shared)
         } catch {
-            NSLog("TokiToki: failed to seed shared CLI: %@", error.localizedDescription)
+            NSLog("Tokitoki: failed to seed shared CLI: %@", error.localizedDescription)
         }
     }
 
@@ -77,7 +77,7 @@ enum AgentProcess {
         do {
             _ = try await run(shared, arguments: ["update"])
         } catch {
-            NSLog("TokiToki: shared CLI update failed: %@", error.localizedDescription)
+            NSLog("Tokitoki: shared CLI update failed: %@", error.localizedDescription)
         }
     }
 

@@ -125,7 +125,7 @@ final class SettingsWindowController: NSWindowController {
         verifyAPIKeyButton.target = self
         verifyAPIKeyButton.action = #selector(verifyAPIKey)
         verifyAPIKeyButton.bezelStyle = .rounded
-        verifyAPIKeyButton.toolTip = "Check this key with the TokiToki server"
+        verifyAPIKeyButton.toolTip = "Check this key with the Tokitoki server"
 
         verificationProgress.style = .spinning
         verificationProgress.controlSize = .small
