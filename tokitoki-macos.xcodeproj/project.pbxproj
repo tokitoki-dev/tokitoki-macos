@@ -120,7 +120,7 @@
 				B0B1AB872FD2C141000D4EB1 /* Sources */,
 				B0B1AB882FD2C141000D4EB1 /* Frameworks */,
 				B0B1AB892FD2C141000D4EB1 /* Resources */,
-				B0B1ABC02FD2C142000D4EB1 /* Bundle TokiToki CLI */,
+				B0B1ABC02FD2C142000D4EB1 /* Bundle Tokitoki CLI */,
 			);
 			buildRules = (
 			);
@@ -255,7 +255,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		B0B1ABC02FD2C142000D4EB1 /* Bundle TokiToki CLI */ = {
+		B0B1ABC02FD2C142000D4EB1 /* Bundle Tokitoki CLI */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -268,7 +268,7 @@
 				"$(PROJECT_DIR)/.build/cli/tokitoki-darwin-amd64",
 				"$(PROJECT_DIR)/.build/cli/tokitoki-darwin-arm64",
 			);
-			name = "Bundle TokiToki CLI";
+			name = "Bundle Tokitoki CLI";
 			outputFileListPaths = (
 			);
 			outputPaths = (
@@ -441,7 +441,7 @@
 		B0B1ABAD2FD2C142000D4EB1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = TokiTokiAppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = TokitokiAppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -461,7 +461,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.tokitoki.macos";
 				PRODUCT_MODULE_NAME = tokitoki_macos;
 				PRODUCT_NAME = Tokitoki;
@@ -479,7 +479,7 @@
 		B0B1ABAE2FD2C142000D4EB1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = TokiTokiAppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = TokitokiAppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -499,7 +499,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.tokitoki.macos";
 				PRODUCT_MODULE_NAME = tokitoki_macos;
 				PRODUCT_NAME = Tokitoki;
@@ -523,7 +523,7 @@
 				DEVELOPMENT_TEAM = 998ZTJV2HQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.tokitoki.macosTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -544,7 +544,7 @@
 				DEVELOPMENT_TEAM = 998ZTJV2HQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.tokitoki.macosTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -563,7 +563,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 998ZTJV2HQ;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.tokitoki.macosUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -582,7 +582,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 998ZTJV2HQ;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.tokitoki.macosUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;

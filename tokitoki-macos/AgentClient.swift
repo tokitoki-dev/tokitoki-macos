@@ -23,11 +23,11 @@ struct AgentClient {
         var errorDescription: String? {
             switch self {
             case let .commandFailed(status, _):
-                return "TokiToki upload failed (exit \(status))."
+                return "Tokitoki upload failed (exit \(status))."
             case let .invalidResponse(error):
-                return "TokiToki returned invalid JSON: \(error.localizedDescription)"
+                return "Tokitoki returned invalid JSON: \(error.localizedDescription)"
             case .rejected:
-                return "TokiToki reported failure."
+                return "Tokitoki reported failure."
             }
         }
 

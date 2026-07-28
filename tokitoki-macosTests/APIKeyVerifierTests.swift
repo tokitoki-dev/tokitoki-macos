@@ -104,7 +104,7 @@ final class APIKeyVerifierTests: XCTestCase {
 
         XCTAssertLessThan(buttonFrame.maxY, fieldFrame.minY)
         XCTAssertFalse(verifyButton.isEnabled)
-        XCTAssertEqual(verifyButton.toolTip, "Check this key with the TokiToki server")
+        XCTAssertEqual(verifyButton.toolTip, "Check this key with the Tokitoki server")
     }
 
     func testVersionLabelAlignsWithAutomaticUpdatesTitle() throws {

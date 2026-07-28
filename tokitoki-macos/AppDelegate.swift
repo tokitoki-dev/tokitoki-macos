@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startMonitoringIfEnabled()
             scheduleAutomaticSync()
             // Silent, and fully owned by the CLI itself — the app only asks.
-            await AgentProcess.upgradeSharedCLI()
+            await AgentProcess.updateSharedCLI()
         }
         refreshTimer = Timer.scheduledTimer(
             timeInterval: 30 * 60,
@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureStatusItemIcon() {
         guard let button = statusItem.button else { return }
 
-        if let image = NSImage(named: "TokiTokiLogo")?.copy() as? NSImage {
+        if let image = NSImage(named: "TokitokiLogo")?.copy() as? NSImage {
             image.isTemplate = true
             image.size = NSSize(width: 22, height: 22)
             button.image = image
@@ -85,7 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             item.target = self
             item.image = nil
         }
-        menu.delegate = self
         statusItem.menu = menu
     }
 
@@ -102,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // NSMenu sizes a custom item by the view's frame, so the container
         // needs a real one; width tracks the menu via autoresizing.
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 175, height: 28))
+        let container = MenuItemContainerView(frame: NSRect(x: 0, y: 0, width: 175, height: 28))
         container.autoresizingMask = [.width]
         container.addSubview(label)
         container.addSubview(enabledSwitch)
@@ -154,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func triggerCLIUpgrade() {
-        Task { await AgentProcess.upgradeSharedCLI() }
+        Task { await AgentProcess.updateSharedCLI() }
     }
 
     private func syncAutomatically() async {
@@ -166,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch let error as AgentClient.AgentError where error.isMissingAPIKey {
             return
         } catch {
-            NSLog("TokiToki: %@", Self.menuMessage(for: error))
+            NSLog("Tokitoki: %@", Self.menuMessage(for: error))
         }
     }
 
@@ -180,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 apiKey = nil
             } catch {
                 apiKey = nil
-                NSLog("TokiToki: %@", Self.menuMessage(for: error))
+                NSLog("Tokitoki: %@", Self.menuMessage(for: error))
             }
             guard let self else { return }
             settingsWindowController.show(
@@ -200,7 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try await client.setAPIKey(apiKey)
                 scheduleAutomaticSync()
             } catch {
-                NSLog("TokiToki: %@", Self.menuMessage(for: error))
+                NSLog("Tokitoki: %@", Self.menuMessage(for: error))
             }
         }
     }
@@ -242,12 +241,16 @@ extension AppDelegate: NSMenuItemValidation {
     }
 }
 
-extension AppDelegate: NSMenuDelegate {
-    // NSSwitch draws gray while the app is inactive, and a menu bar app is
-    // inactive whenever its menu opens. Activating here makes the switch pick
-    // up the system accent color — the same trick Tailscale uses.
-    func menuWillOpen(_ menu: NSMenu) {
-        NSApp.activate(ignoringOtherApps: true)
+/// Controls draw their active look from the key state of the window they sit
+/// in, and a menu's window never becomes key on its own — so the switch would
+/// render gray. Marking the menu window as key the moment the view lands in it
+/// keeps the switch in the accent color without touching app activation
+/// (activating the app here would cancel menu tracking on macOS 14+, closing
+/// the menu on first click). This is what Tailscale's menu does.
+private final class MenuItemContainerView: NSView {
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        newWindow?.becomeKey()
     }
 }
 

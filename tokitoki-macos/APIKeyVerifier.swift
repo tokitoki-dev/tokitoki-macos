@@ -1,6 +1,6 @@
 import Foundation
 
-/// Verifies a key directly with the configured TokiToki server.
+/// Verifies a key directly with the configured Tokitoki server.
 ///
 /// The session is ephemeral so a credential check cannot leave cookies or a
 /// cached response behind. The key exists only in the request header and is
@@ -13,9 +13,9 @@ nonisolated struct APIKeyVerifier: Sendable {
         var errorDescription: String? {
             switch self {
             case .invalidResponse:
-                return "TokiToki returned an invalid verification response."
+                return "Tokitoki returned an invalid verification response."
             case .serviceUnavailable:
-                return "TokiToki verification is temporarily unavailable."
+                return "Tokitoki verification is temporarily unavailable."
             }
         }
     }

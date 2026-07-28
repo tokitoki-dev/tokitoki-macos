@@ -7,7 +7,7 @@ its JSON results.
 
 ```
 ┌─────────────────────────┐       Process + stdout JSON        ┌──────────────────┐
-│  TokiToki (Swift, menu   │  ── tokitoki ────────────────────▶ │  tokitoki CLI    │
+│  Tokitoki (Swift, menu   │  ── tokitoki ────────────────────▶ │  tokitoki CLI    │
 │  bar, NSStatusItem)      │                                     │  (Go scanner +   │
 │                          │                                     │   uploader)      │
 └─────────────────────────┘                                     └──────────────────┘
