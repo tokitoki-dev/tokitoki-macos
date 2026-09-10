@@ -1,64 +1,74 @@
-# Tokitoki Menu Bar for macOS
+# Tokitoki for macOS
 
-A native macOS status-bar app that calls the stateless Go agent CLI and renders
-its JSON results.
+Menu bar app that syncs the token usage and cost of your local AI coding
+agents to your [Tokitoki](https://tokitoki.dev) dashboard: Claude Code,
+Codex, GitHub Copilot, Gemini CLI and
+[a dozen more](https://github.com/tokitoki-dev/tokitoki-cli#supported-tools).
+Every AI session shows up next to your coding time, grouped by project, so
+you can see what a feature actually cost.
 
-## Architecture
+Developer ID signed, notarized by Apple, native on Apple Silicon and Intel.
+Updates itself through Sparkle.
 
-```
-┌─────────────────────────┐       Process + stdout JSON        ┌──────────────────┐
-│  Tokitoki (Swift, menu   │  ── tokitoki ────────────────────▶ │  tokitoki CLI    │
-│  bar, NSStatusItem)      │                                     │  (Go scanner +   │
-│                          │                                     │   uploader)      │
-└─────────────────────────┘                                     └──────────────────┘
-                                                              ~/.tokitoki/
-```
+## Install
 
-- **Protocol:** the app launches `tokitoki` for each automatic upload and
-  decodes its minimal success response. Detailed diagnostics stay on stderr;
-  the menu shows a short, actionable status only.
-- **Lifecycle:** on launch and every 30 minutes, the app invokes the CLI when
-  an API key is configured. It also recursively watches the selected Claude
-  Code/Codex data folders and invokes the CLI after a short debounce whenever
-  those files change.
-- **Packaging:** CI and production builds download the reviewed CLI release
-  pinned in `scripts/cli-release-pins.sh`, verify its SHA-256, version, and
-  architecture, then copy the matching binary into
-  `Tokitoki.app/Contents/Resources`. Local builds fall back to compiling the
-  sibling `../tokitoki-cli` checkout so app and CLI changes can be developed
-  together. At launch the app atomically seeds or upgrades the shared
-  `~/.tokitoki/bin/tokitoki` copy used by every client.
+1. Download the DMG from the
+   [latest release](https://github.com/tokitoki-dev/tokitoki-macos/releases/latest):
+   `arm64` for Apple Silicon, `amd64` for Intel Macs.
+2. Drag **Tokitoki** into Applications and open it.
+3. Click the menu bar icon, open **Settings**, and paste the API key from
+   [tokitoki.dev/settings](https://tokitoki.dev/settings).
 
-## Run (dev)
+That is the whole setup. Turn on **Launch at login** in Settings and forget
+about it.
+
+## What it does
+
+- Syncs on launch, every 30 minutes, and shortly after your agents write new
+  session data. It watches their data folders, so a Claude Code session is on
+  the dashboard before you get back to it.
+- Menu: **Dashboard**, **Settings**, tracking on/off, **Quit Tokitoki**.
+- Settings: API key with a **Verify Key** check, launch at login, automatic
+  updates, version.
+- Bundles [tokitoki-cli](https://github.com/tokitoki-dev/tokitoki-cli) and
+  keeps a shared copy in `~/.tokitoki/bin` that the VS Code extension and
+  other Tokitoki clients reuse. Nothing runs in the background between syncs.
+
+## Privacy
+
+The app reads token counts, model names and timestamps from your agents'
+local data and uploads that metadata over HTTPS with your API key. Never
+your code. Delete your data anytime from the dashboard.
+
+## Other clients
+
+[VS Code](https://github.com/tokitoki-dev/tokitoki-vscode) ·
+[Windows](https://github.com/tokitoki-dev/tokitoki-windows) ·
+[CLI](https://github.com/tokitoki-dev/tokitoki-cli) for servers and scripts.
+The overview lives at [github.com/tokitoki-dev](https://github.com/tokitoki-dev).
+
+## Development
 
 ```sh
-# Build and run from Xcode, or use xcodebuild:
-cd tokitoki-macos
 xcodebuild -project tokitoki-macos.xcodeproj -scheme tokitoki-macos \
   -configuration Debug -derivedDataPath /tmp/tokitoki-derived build
 open /tmp/tokitoki-derived/Build/Products/Debug/Tokitoki.app
 ```
 
-All server access uses `TOKITOKI_BASE_URL`. Without it, the native app and the
-CLI it launches both use `https://tokitoki.dev`. To run the app executable
-against a local server:
+Local builds compile the sibling `../tokitoki-cli` checkout so app and CLI
+changes can be developed together. Point the app at a local server with
+`TOKITOKI_BASE_URL`:
 
 ```sh
 TOKITOKI_BASE_URL=http://localhost:9093 \
   /tmp/tokitoki-derived/Build/Products/Debug/Tokitoki.app/Contents/MacOS/Tokitoki
 ```
 
-The status bar uses the Tokitoki icon. Its menu provides **Dashboard**,
-**Settings**, tracking control, and **Quit Tokitoki**. Settings provides API
-key verification, launch-at-login, version, and Sparkle update controls.
-
-The app prefers the shared CLI and uses the bundled copy as its trusted seed and
-fallback. It never requires a long-running local daemon.
-
-Developer ID signing, Apple notarization, native Intel/Apple Silicon DMGs, and
-Sparkle signing are automated by the tag release workflow. See
-[RELEASING.md](RELEASING.md) for the protected release process.
+Work on `dev`; releases are tagged from `main`. How the app drives the CLI
+and how the CLI is pinned and verified is in
+[ARCHITECTURE.md](ARCHITECTURE.md). Signing, notarization and the tag
+release workflow are in [RELEASING.md](RELEASING.md).
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+[Apache License 2.0](LICENSE)
