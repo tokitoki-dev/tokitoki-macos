@@ -75,10 +75,6 @@ enum AgentDataDirectories {
         }
     }
 
-    nonisolated static func watchPaths() -> [String] {
-        Array(Set(allProviders.flatMap(paths(for:)).compactMap(existingWatchDirectory))).sorted()
-    }
-
     nonisolated static func syncArguments() -> [String] {
         var arguments: [String] = []
         for provider in allProviders {
@@ -128,18 +124,5 @@ enum AgentDataDirectories {
 
     private nonisolated static func isExistingPath(_ path: String) -> Bool {
         FileManager.default.fileExists(atPath: path)
-    }
-
-    private nonisolated static func existingWatchDirectory(_ path: String) -> String? {
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return nil }
-        if isDirectory.boolValue {
-            return path
-        }
-        let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
-        var parentIsDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: parent, isDirectory: &parentIsDirectory),
-              parentIsDirectory.boolValue else { return nil }
-        return parent
     }
 }

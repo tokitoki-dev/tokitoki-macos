@@ -67,7 +67,7 @@ final class tokitoki_macosTests: XCTestCase {
         XCTAssertNotEqual(AgentProcess.resolveBinary(), script)
     }
 
-    func testCopilotExporterFilePathUsesParentForWatchAndFileForSync() throws {
+    func testCopilotExporterFilePathIsPassedToSync() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("copilot-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -80,7 +80,6 @@ final class tokitoki_macosTests: XCTestCase {
         }
 
         XCTAssertTrue(AgentDataDirectories.syncArguments().contains("copilot=\(file.path)"))
-        XCTAssertTrue(AgentDataDirectories.watchPaths().contains(dir.path))
     }
 
     @MainActor

@@ -6,12 +6,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var refreshTimer: Timer?
     private var cliUpgradeTimer: Timer?
     private var syncTask: Task<Void, Never>?
-    private var syncQueued = false
     private var client: AgentClient?
     private let settingsWindowController = SettingsWindowController()
-    private lazy var usageMonitor = AIUsageMonitor { [weak self] in
-        self?.scheduleAutomaticSync()
-    }
+
+    /// How often the CLI scans the local AI logs.
+    ///
+    /// A plain timer, not a file watcher. The CLI keeps a size+mtime snapshot of
+    /// every file it has read and skips the unchanged ones, so a scan with
+    /// nothing new costs one stat per file — under a second here. Watching the
+    /// agents' directories to decide when to scan was second-guessing work the
+    /// CLI already makes cheap, and it guessed badly: ~/.claude and ~/.codex are
+    /// written constantly by things that are not transcripts (plugins, caches,
+    /// Codex's own log database), so 98% of the scans it set off found nothing.
+    private static let syncInterval: TimeInterval = 2 * 60
 
     private let updater = Updater()
 
@@ -30,18 +37,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await AgentProcess.bootstrap()
             guard let self else { return }
             client = AgentClient()
-            startMonitoringIfEnabled()
             scheduleAutomaticSync()
             // Silent, and fully owned by the CLI itself — the app only asks.
             await AgentProcess.updateSharedCLI()
         }
         refreshTimer = Timer.scheduledTimer(
-            timeInterval: 30 * 60,
+            timeInterval: Self.syncInterval,
             target: self,
             selector: #selector(triggerAutomaticSync),
             userInfo: nil,
             repeats: true
         )
+        // Nothing here needs the exact second; letting the system batch the
+        // wake-up with others is what keeps a background timer off the
+        // energy report.
+        refreshTimer?.tolerance = Self.syncInterval / 4
         cliUpgradeTimer = Timer.scheduledTimer(
             timeInterval: 24 * 60 * 60,
             target: self,
@@ -69,7 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshTimer?.invalidate()
         cliUpgradeTimer?.invalidate()
         syncTask?.cancel()
-        usageMonitor.stop()
     }
 
     private func buildMenu() {
@@ -119,32 +128,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func enabledToggled() {
         AgentPreferences.trackingEnabled = enabledSwitch.state == .on
+        // Turning it off needs nothing: every sync checks the flag first.
         if AgentPreferences.trackingEnabled {
-            startMonitoringIfEnabled()
             scheduleAutomaticSync()
-        } else {
-            usageMonitor.stop()
         }
     }
 
-    private func startMonitoringIfEnabled() {
-        guard AgentPreferences.trackingEnabled else { return }
-        usageMonitor.start()
-    }
-
+    /// One sync at a time. A trigger that lands while one is running is
+    /// dropped rather than queued — the next tick is never more than
+    /// `syncInterval` away, and the CLI picks up whatever it missed.
     private func scheduleAutomaticSync() {
-        guard syncTask == nil else {
-            syncQueued = true
-            return
-        }
+        guard syncTask == nil else { return }
         syncTask = Task { [weak self] in
             guard let self else { return }
             await syncAutomatically()
             syncTask = nil
-            if syncQueued {
-                syncQueued = false
-                scheduleAutomaticSync()
-            }
         }
     }
 
@@ -156,14 +154,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await AgentProcess.updateSharedCLI() }
     }
 
+    /// One CLI process per tick, and no API-key check before it. Without a key
+    /// the CLI still scans and keeps the events queued locally — it uploads
+    /// nothing until a key is set, then sends everything collected in between
+    /// (CLI v0.1.4+, and the shared CLI is never older than the bundled one).
+    /// Asking for the key first cost a second process on every tick to skip a
+    /// scan that was harmless, and that a fresh install wants done early: the
+    /// first full pass over the history is then already behind it when the key
+    /// arrives.
     private func syncAutomatically() async {
         guard AgentPreferences.trackingEnabled, let client else { return }
 
         do {
-            guard !(try await client.getAPIKey()).isEmpty else { return }
             try await client.sync()
-        } catch let error as AgentClient.AgentError where error.isMissingAPIKey {
-            return
         } catch {
             NSLog("Tokitoki: %@", Self.menuMessage(for: error))
         }
